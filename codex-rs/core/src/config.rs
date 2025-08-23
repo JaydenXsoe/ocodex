@@ -1,3 +1,4 @@
+use crate::BUILT_IN_OSS_MODEL_PROVIDER_ID;
 use crate::config_profile::ConfigProfile;
 use crate::config_types::History;
 use crate::config_types::McpServerConfig;
@@ -28,7 +29,7 @@ use tempfile::NamedTempFile;
 use toml::Value as TomlValue;
 use toml_edit::DocumentMut;
 
-const OPENAI_DEFAULT_MODEL: &str = "gpt-5";
+const OPENAI_DEFAULT_MODEL: &str = "gpt-oss:20b";
 
 /// Maximum number of bytes of the documentation that will be embedded. Larger
 /// files are *silently truncated* to this size so we do not take up too much of
@@ -629,7 +630,7 @@ impl Config {
         let model_provider_id = model_provider
             .or(config_profile.model_provider)
             .or(cfg.model_provider)
-            .unwrap_or_else(|| "openai".to_string());
+            .unwrap_or_else(|| BUILT_IN_OSS_MODEL_PROVIDER_ID.to_string());
         let model_provider = model_providers
             .get(&model_provider_id)
             .ok_or_else(|| {

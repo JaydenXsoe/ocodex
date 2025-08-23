@@ -81,3 +81,8 @@ CHANGELOG.ignore.md
 # nix related
 .direnv
 .envrc
+
+
+# Added by cargo
+
+/target

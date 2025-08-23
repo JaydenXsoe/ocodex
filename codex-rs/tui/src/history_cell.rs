@@ -234,7 +234,8 @@ pub(crate) fn new_session_info(
             Line::from(vec![
                 Span::raw(">_ ").dim(),
                 Span::styled(
-                    "You are using OpenAI Codex in",
+                    "You are using Ollama Codex in",
+                    //"You are using OpenAI Codex in",
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(format!(" {cwd_str}")).dim(),

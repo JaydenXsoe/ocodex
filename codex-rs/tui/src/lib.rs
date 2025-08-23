@@ -153,6 +153,17 @@ pub async fn run_main(
         }
     };
 
+    // Disallow OpenAI providers unless explicitly enabled via the CLI flag.
+    if config.model_provider.requires_openai_auth && !cli.allow_openai {
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!(
+                "OpenAI usage is disabled by default. Re-run with `ocodex --openai` to enable."
+            );
+        }
+        std::process::exit(2);
+    }
+
     // we load config.toml here to determine project state.
     #[allow(clippy::print_stderr)]
     let config_toml = {
@@ -443,6 +454,10 @@ mod tests {
         )
         .expect("load default config");
         cfg.preferred_auth_method = preferred;
+        // For these tests, force a provider that requires OpenAI auth so the
+        // login gating logic is exercised regardless of the global default
+        // provider (which may be OSS).
+        cfg.model_provider.requires_openai_auth = true;
         cfg
     }
 

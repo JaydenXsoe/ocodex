@@ -38,6 +38,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         images,
         model: model_cli_arg,
         oss,
+        allow_openai,
         config_profile,
         full_auto,
         dangerously_bypass_approvals_and_sandbox,
@@ -161,6 +162,12 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     };
 
     let config = Config::load_with_cli_overrides(cli_kv_overrides, overrides)?;
+
+    // Disallow OpenAI providers unless explicitly enabled via the CLI flag.
+    if config.model_provider.requires_openai_auth && !allow_openai {
+        eprintln!("OpenAI usage is disabled by default. Re-run with `ocodex --openai` to enable.");
+        std::process::exit(2);
+    }
     let mut event_processor: Box<dyn EventProcessor> = if json_mode {
         Box::new(EventProcessorWithJsonOutput::new(last_message_file.clone()))
     } else {

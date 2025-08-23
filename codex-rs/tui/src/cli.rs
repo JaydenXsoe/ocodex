@@ -17,6 +17,10 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
+    /// Allow using OpenAI providers. Disabled by default.
+    #[arg(long = "openai", default_value_t = false)]
+    pub allow_openai: bool,
+
     /// Convenience flag to select the local open source model provider.
     /// Equivalent to -c model_provider=oss; verifies a local Ollama server is
     /// running.

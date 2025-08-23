@@ -94,3 +94,50 @@ This folder is the root of a Cargo workspace. It contains quite a bit of experim
 - [`exec/`](./exec) "headless" CLI for use in automation.
 - [`tui/`](./tui) CLI that launches a fullscreen TUI built with [Ratatui](https://ratatui.rs/).
 - [`cli/`](./cli) CLI multitool that provides the aforementioned CLIs via subcommands.
+
+## `ocodex` binary and local defaults
+
+The workspace produces an `ocodex` binary alongside `codex` with local-first defaults:
+
+- Provider: `oss` (Ollama-compatible)
+- Model: `gpt-oss:20b`
+- OpenAI usage: disabled by default; enable with `--openai`
+  (For OpenAI providers, you can disable client-side rate-limit waits with `CODEX_DISABLE_RATE_LIMITS=1`.)
+
+### Install
+
+Install binaries to your PATH:
+
+```
+cargo install --path cli
+```
+
+This installs both `codex` and `ocodex`.
+
+### Usage
+
+- Local, interactive TUI:
+
+```
+ocodex
+```
+
+- Local, non-interactive:
+
+```
+ocodex exec -m gpt-oss:20b -- json "Your prompt here"
+```
+
+- Opt-in OpenAI:
+
+```
+ocodex --openai
+ocodex exec --openai -m gpt-5 -- json "Your prompt here"
+```
+
+If a selected provider requires OpenAI auth and `--openai` is not passed,
+`ocodex` exits with a hint to re-run with `--openai`.
+
+### Running from any directory
+
+`ocodex exec` allows running outside a Git repo by default. Use `--no-skip-git-repo-check` to enforce the check.

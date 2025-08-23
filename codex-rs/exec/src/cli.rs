@@ -17,6 +17,10 @@ pub struct Cli {
     #[arg(long = "oss", default_value_t = false)]
     pub oss: bool,
 
+    /// Allow using OpenAI providers. Disabled by default.
+    #[arg(long = "openai", default_value_t = false)]
+    pub allow_openai: bool,
+
     /// Select the sandbox policy to use when executing model-generated shell
     /// commands.
     #[arg(long = "sandbox", short = 's', value_enum)]
@@ -45,7 +49,7 @@ pub struct Cli {
     pub cwd: Option<PathBuf>,
 
     /// Allow running Codex outside a Git repository.
-    #[arg(long = "skip-git-repo-check", default_value_t = false)]
+    #[arg(long = "skip-git-repo-check", default_value_t = true)]
     pub skip_git_repo_check: bool,
 
     #[clap(skip)]

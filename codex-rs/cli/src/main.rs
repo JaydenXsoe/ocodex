@@ -29,9 +29,9 @@ use crate::proto::ProtoCli;
     // If a sub‑command is given, ignore requirements of the default args.
     subcommand_negates_reqs = true,
     // The executable is sometimes invoked via a platform‑specific name like
-    // `codex-x86_64-unknown-linux-musl`, but the help output should always use
-    // the generic `codex` command name that users run.
-    bin_name = "codex"
+    // `ocodex-x86_64-unknown-linux-musl`, but the help output should always use
+    // the generic `ocodex` command name that users run.
+    bin_name = "ocodex"
 )]
 struct MultitoolCli {
     #[clap(flatten)]
@@ -145,6 +145,8 @@ fn main() -> anyhow::Result<()> {
 async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     let cli = MultitoolCli::parse();
 
+    // Note: defaults and provider gating are handled within the TUI/Exec CLIs.
+
     match cli.subcommand {
         None => {
             let mut tui_cli = cli.interactive;
@@ -230,6 +232,6 @@ fn prepend_config_flags(
 
 fn print_completion(cmd: CompletionCommand) {
     let mut app = MultitoolCli::command();
-    let name = "codex";
+    let name = "ocodex";
     generate(cmd.shell, &mut app, name, &mut std::io::stdout());
 }

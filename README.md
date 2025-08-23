@@ -703,3 +703,39 @@ Have you discovered a vulnerability or have concerns about model output? Please 
 ## License
 
 This repository is licensed under the [Apache-2.0 License](LICENSE).
+## ocodex: Local-first defaults
+
+This repo now provides an `ocodex` binary with local-first defaults:
+
+- Default provider: local OSS (Ollama-compatible)
+- Default model: `gpt-oss:20b`
+- OpenAI usage: disabled by default; enable with `--openai`
+  (For OpenAI providers, you can disable client-side rate-limit waits with `CODEX_DISABLE_RATE_LIMITS=1`.)
+
+### Install
+
+Prerequisites: Rust toolchain installed and `cargo` on your PATH.
+
+- Build and install system-wide binaries:
+
+  - From repo root: `cargo install --path codex-rs/cli`
+
+  This installs both `codex` and `ocodex` on your PATH.
+
+### Usage
+
+- Local model (default):
+
+  - `ocodex` (interactive TUI)
+  - `ocodex exec -m gpt-oss:20b -- json "Your prompt..."` (non-interactive)
+
+- Use OpenAI (explicit opt-in):
+
+  - `ocodex --openai` (interactive)
+  - `ocodex exec --openai -m gpt-5 -- json "Your prompt..."`
+
+If a provider requires OpenAI auth and `--openai` is not passed, `ocodex` exits with a hint to re-run with `--openai`.
+
+### Run from any directory
+
+`ocodex exec` allows running outside a Git repository by default (you can opt back in with `--no-skip-git-repo-check`).

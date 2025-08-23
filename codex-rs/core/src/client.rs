@@ -93,6 +93,12 @@ impl ModelClient {
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
+        // If an SSE fixture is provided (used by tests), always route through the
+        // Responses implementation which short‑circuits to the local file.
+        if CODEX_RS_SSE_FIXTURE.is_some() {
+            return self.stream_responses(prompt).await;
+        }
+
         match self.provider.wire_api {
             WireApi::Responses => self.stream_responses(prompt).await,
             WireApi::Chat => {
@@ -630,6 +636,13 @@ fn rate_limit_regex() -> &'static Regex {
 }
 
 fn try_parse_retry_after(err: &Error) -> Option<Duration> {
+    // Allow disabling rate-limit based delays via env.
+    if let Ok(v) = std::env::var("CODEX_DISABLE_RATE_LIMITS") {
+        let v = v.to_ascii_lowercase();
+        if v == "1" || v == "true" || v == "yes" {
+            return None;
+        }
+    }
     if err.code != Some("rate_limit_exceeded".to_string()) {
         return None;
     }
