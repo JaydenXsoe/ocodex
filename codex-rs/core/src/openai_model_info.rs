@@ -78,9 +78,16 @@ pub(crate) fn get_model_info(model_family: &ModelFamily) -> Option<ModelInfo> {
             max_output_tokens: 4_096,
         }),
 
+        // https://platform.openai.com/docs/models/gpt-5
         "gpt-5" => Some(ModelInfo {
             context_window: 200_000,
             max_output_tokens: 100_000,
+        }),
+
+        // https://platform.openai.com/docs/models/gpt-oss-20b 
+        "gpt-oss:20b" => Some(ModelInfo {
+            context_window: 131,072,
+            max_output_tokens: 131,072,
         }),
 
         _ if slug.starts_with("codex-") => Some(ModelInfo {
