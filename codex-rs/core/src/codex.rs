@@ -104,6 +104,7 @@ use crate::shell;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use crate::user_notification::UserNotification;
 use crate::util::backoff;
+use crate::web_tools;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use codex_protocol::models::ContentItem;
@@ -495,6 +496,27 @@ impl Session {
             model_reasoning_summary,
             session_id,
         );
+
+        // Load .env from the session working directory so runtime tools can
+        // read provider keys (e.g., SERPAPI_KEY) without requiring global env.
+        // Ignore errors if no .env file exists.
+        let _ = dotenvy::from_path(cwd.join(".env"));
+
+        // Enable web tools when using the built-in OSS provider or when the
+        // configured provider looks like a local Ollama endpoint.
+        let is_ollama_like_provider = {
+            let mut ok = config.model_provider_id == crate::BUILT_IN_OSS_MODEL_PROVIDER_ID;
+            if !ok {
+                if let Some(base) = provider.base_url.as_deref() {
+                    let b = base.to_lowercase();
+                    ok = b.contains("localhost:11434") || b.contains("127.0.0.1:11434");
+                }
+                if !ok {
+                    ok = provider.name.to_lowercase().contains("ollama");
+                }
+            }
+            ok
+        };
         let turn_context = TurnContext {
             client,
             tools_config: ToolsConfig::new(
@@ -504,6 +526,7 @@ impl Session {
                 config.include_plan_tool,
                 config.include_apply_patch_tool,
                 config.use_experimental_streamable_shell_tool,
+                is_ollama_like_provider,
             ),
             user_instructions,
             base_instructions,
@@ -1068,7 +1091,7 @@ async fn submission_loop(
                 let client = ModelClient::new(
                     Arc::new(updated_config),
                     auth_manager,
-                    provider,
+                    provider.clone(),
                     effective_effort,
                     effective_summary,
                     sess.session_id,
@@ -1080,6 +1103,20 @@ async fn submission_loop(
                     .unwrap_or(prev.sandbox_policy.clone());
                 let new_cwd = cwd.clone().unwrap_or_else(|| prev.cwd.clone());
 
+                // Recompute provider detection in this scope
+                let is_ollama_like_provider = {
+                    let mut ok = config.model_provider_id == crate::BUILT_IN_OSS_MODEL_PROVIDER_ID;
+                    if !ok {
+                        if let Some(base) = provider.base_url.as_deref() {
+                            let b = base.to_lowercase();
+                            ok = b.contains("localhost:11434") || b.contains("127.0.0.1:11434");
+                        }
+                        if !ok {
+                            ok = provider.name.to_lowercase().contains("ollama");
+                        }
+                    }
+                    ok
+                };
                 let tools_config = ToolsConfig::new(
                     &effective_family,
                     new_approval_policy,
@@ -1087,6 +1124,7 @@ async fn submission_loop(
                     config.include_plan_tool,
                     config.include_apply_patch_tool,
                     config.use_experimental_streamable_shell_tool,
+                    is_ollama_like_provider,
                 );
 
                 let new_turn_context = TurnContext {
@@ -1151,12 +1189,28 @@ async fn submission_loop(
                     let client = ModelClient::new(
                         Arc::new(per_turn_config),
                         None,
-                        provider,
+                        provider.clone(),
                         effort,
                         summary,
                         sess.session_id,
                     );
 
+                    // Recompute provider detection in this scope
+                    let is_ollama_like_provider = {
+                        let mut ok = config.model_provider_id
+                            == crate::BUILT_IN_OSS_MODEL_PROVIDER_ID;
+                        if !ok {
+                            if let Some(base) = provider.base_url.as_deref() {
+                                let b = base.to_lowercase();
+                                ok = b.contains("localhost:11434")
+                                    || b.contains("127.0.0.1:11434");
+                            }
+                            if !ok {
+                                ok = provider.name.to_lowercase().contains("ollama");
+                            }
+                        }
+                        ok
+                    };
                     let fresh_turn_context = TurnContext {
                         client,
                         tools_config: ToolsConfig::new(
@@ -1166,6 +1220,7 @@ async fn submission_loop(
                             config.include_plan_tool,
                             config.include_apply_patch_tool,
                             config.use_experimental_streamable_shell_tool,
+                            is_ollama_like_provider,
                         ),
                         user_instructions: turn_context.user_instructions.clone(),
                         base_instructions: turn_context.base_instructions.clone(),
@@ -2069,6 +2124,66 @@ async fn handle_function_call(
                 call_id,
             )
             .await
+        }
+        "web_search" => {
+            let args = match serde_json::from_str::<crate::web_tools::WebSearchArgs>(&arguments) {
+                Ok(a) => a,
+                Err(e) => {
+                    return ResponseInputItem::FunctionCallOutput {
+                        call_id,
+                        output: FunctionCallOutputPayload {
+                            content: format!("failed to parse function arguments: {e}"),
+                            success: Some(false),
+                        },
+                    };
+                }
+            };
+            match web_tools::web_search(args).await {
+                Ok(payload) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: payload,
+                        success: Some(true),
+                    },
+                },
+                Err(e) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: format!("web_search error: {e}"),
+                        success: Some(false),
+                    },
+                },
+            }
+        }
+        "http_get" => {
+            let args = match serde_json::from_str::<crate::web_tools::HttpGetArgs>(&arguments) {
+                Ok(a) => a,
+                Err(e) => {
+                    return ResponseInputItem::FunctionCallOutput {
+                        call_id,
+                        output: FunctionCallOutputPayload {
+                            content: format!("failed to parse function arguments: {e}"),
+                            success: Some(false),
+                        },
+                    };
+                }
+            };
+            match web_tools::http_get(args).await {
+                Ok(payload) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: payload,
+                        success: Some(true),
+                    },
+                },
+                Err(e) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: format!("http_get error: {e}"),
+                        success: Some(false),
+                    },
+                },
+            }
         }
         "update_plan" => handle_update_plan(sess, arguments, sub_id, call_id).await,
         EXEC_COMMAND_TOOL_NAME => {

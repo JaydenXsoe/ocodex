@@ -55,6 +55,7 @@ pub mod turn_diff_tracker;
 pub mod user_agent;
 mod user_notification;
 pub mod util;
+mod web_tools;
 pub use apply_patch::CODEX_APPLY_PATCH_ARG1;
 pub use safety::get_platform_sandbox;
 // Re-export the protocol types from the standalone `codex-protocol` crate so existing

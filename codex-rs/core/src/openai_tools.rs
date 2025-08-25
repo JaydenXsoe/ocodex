@@ -64,6 +64,7 @@ pub struct ToolsConfig {
     pub shell_type: ConfigShellToolType,
     pub plan_tool: bool,
     pub apply_patch_tool_type: Option<ApplyPatchToolType>,
+    pub include_web_tools: bool,
 }
 
 impl ToolsConfig {
@@ -74,6 +75,7 @@ impl ToolsConfig {
         include_plan_tool: bool,
         include_apply_patch_tool: bool,
         use_streamable_shell_tool: bool,
+        is_oss_provider: bool,
     ) -> Self {
         let mut shell_type = if use_streamable_shell_tool {
             ConfigShellToolType::StreamableShell
@@ -100,10 +102,16 @@ impl ToolsConfig {
             }
         };
 
+        // Enable web tools for the OSS provider (Ollama). This ensures any
+        // model served by a local Ollama instance (e.g. gemma3, mistral, llama)
+        // gains web capabilities regardless of the model slug.
+        let include_web_tools = is_oss_provider;
+
         Self {
             shell_type,
             plan_tool: include_plan_tool,
             apply_patch_tool_type,
+            include_web_tools,
         }
     }
 }
@@ -272,6 +280,61 @@ The shell tool is used to execute shell commands.
         parameters: JsonSchema::Object {
             properties,
             required: Some(vec!["command".to_string()]),
+            additional_properties: Some(false),
+        },
+    })
+}
+
+fn create_web_search_tool() -> OpenAiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "query".to_string(),
+        JsonSchema::String {
+            description: Some("The web search query".to_string()),
+        },
+    );
+    properties.insert(
+        "max_results".to_string(),
+        JsonSchema::Number {
+            description: Some("Optional limit of results to return (default 5)".to_string()),
+        },
+    );
+
+    OpenAiTool::Function(ResponsesApiTool {
+        name: "web_search".to_string(),
+        description: "Searches the web and returns top results with titles, URLs, and snippets"
+            .to_string(),
+        strict: false,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["query".to_string()]),
+            additional_properties: Some(false),
+        },
+    })
+}
+
+fn create_http_get_tool() -> OpenAiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "url".to_string(),
+        JsonSchema::String {
+            description: Some("The URL to fetch (http/https)".to_string()),
+        },
+    );
+    properties.insert(
+        "max_bytes".to_string(),
+        JsonSchema::Number {
+            description: Some("Maximum response bytes to read (default 200000)".to_string()),
+        },
+    );
+
+    OpenAiTool::Function(ResponsesApiTool {
+        name: "http_get".to_string(),
+        description: "Fetches a URL and returns text content and metadata (truncated)".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["url".to_string()]),
             additional_properties: Some(false),
         },
     })
@@ -532,6 +595,12 @@ pub(crate) fn get_openai_tools(
         }
     }
 
+    // Add web tools when enabled (currently only for OSS/Ollama models)
+    if config.include_web_tools {
+        tools.push(create_web_search_tool());
+        tools.push(create_http_get_tool());
+    }
+
     tools
 }
 
@@ -577,6 +646,7 @@ mod tests {
             true,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
         let tools = get_openai_tools(&config, Some(HashMap::new()));
 
@@ -593,6 +663,7 @@ mod tests {
             true,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
         let tools = get_openai_tools(&config, Some(HashMap::new()));
 
@@ -609,6 +680,7 @@ mod tests {
             false,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
         let tools = get_openai_tools(
             &config,
@@ -704,6 +776,7 @@ mod tests {
             false,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
 
         let tools = get_openai_tools(
@@ -761,6 +834,7 @@ mod tests {
             false,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
 
         let tools = get_openai_tools(
@@ -813,6 +887,7 @@ mod tests {
             false,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
 
         let tools = get_openai_tools(
@@ -868,6 +943,7 @@ mod tests {
             false,
             false,
             /*use_experimental_streamable_shell_tool*/ false,
+            /*is_oss_provider*/ false,
         );
 
         let tools = get_openai_tools(
