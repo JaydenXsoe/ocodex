@@ -110,12 +110,17 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         .with_writer(std::io::stderr)
         .try_init();
 
+    // Default ocodex exec to workspace-write unless explicitly set.
     let sandbox_mode = if full_auto {
         Some(SandboxMode::WorkspaceWrite)
     } else if dangerously_bypass_approvals_and_sandbox {
         Some(SandboxMode::DangerFullAccess)
     } else {
-        sandbox_mode_cli_arg.map(Into::<SandboxMode>::into)
+        Some(
+            sandbox_mode_cli_arg
+                .map(Into::<SandboxMode>::into)
+                .unwrap_or(SandboxMode::WorkspaceWrite),
+        )
     };
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
@@ -161,7 +166,34 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         }
     };
 
-    let config = Config::load_with_cli_overrides(cli_kv_overrides, overrides)?;
+    // If the caller provided an explicit network override, honor it.
+    // Otherwise we'll enable network by default for workspace-write below.
+    let has_net_override = cli_kv_overrides
+        .iter()
+        .any(|(k, _)| k == "sandbox_workspace_write.network_access");
+
+    let mut config = Config::load_with_cli_overrides(cli_kv_overrides, overrides)?;
+
+    // Default to enabling network when using workspace-write unless the user
+    // explicitly provided a network override.
+    if !has_net_override {
+        if let codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+            writable_roots,
+            network_access,
+            exclude_tmpdir_env_var,
+            exclude_slash_tmp,
+        } = &config.sandbox_policy
+        {
+            if !network_access {
+                config.sandbox_policy = codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+                    writable_roots: writable_roots.clone(),
+                    network_access: true,
+                    exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
+                    exclude_slash_tmp: *exclude_slash_tmp,
+                };
+            }
+        }
+    }
 
     // Disallow OpenAI providers unless explicitly enabled via the CLI flag.
     if config.model_provider.requires_openai_auth && !allow_openai {

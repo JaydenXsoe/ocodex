@@ -1,0 +1,8 @@
+
+[mcp_servers.search]
+command = "node"
+args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/.codex/mcp_websearch_embedded.js"]
+[mcp_servers.search.env]
+SERPAPI_KEY = "817b1ba016d7f79ffdf2f0a4b39c91e40685602f0d3e337b9ae0d0d215f15997"
+GOOGLE_API_KEY = "AIzaSyCr-SR9hFlyI7wI7V3T2L5iBFFAAJH4X5g"
+GOOGLE_CSE_ID = "8192948a31da64f43"

@@ -1,0 +1,6 @@
+{"id":"76441784-c6ef-49df-907c-1ff1758bb17f","timestamp":"2025-08-25T11:43:58.121Z","instructions":null,"git":{"commit_hash":"e421928e7219285177e7487a8c4445cc12e93eee","branch":"main","repository_url":"git@github.com:JaydenXsoe/JaydenXsoe.github.io"}}
+{"record_type":"state"}
+{"type":"message","id":null,"role":"user","content":[{"type":"input_text","text":"<environment_context>\n  <cwd>/Users/kobra/Dev/Chatgpt-Apps</cwd>\n  <approval_policy>on-request</approval_policy>\n  <sandbox_mode>workspace-write</sandbox_mode>\n  <network_access>restricted</network_access>\n  <shell>zsh</shell>\n</environment_context>"}]}
+{"record_type":"state"}
+{"type":"message","id":null,"role":"user","content":[{"type":"input_text","text":"hello"}]}
+{"record_type":"state"}

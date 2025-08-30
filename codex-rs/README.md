@@ -141,3 +141,59 @@ If a selected provider requires OpenAI auth and `--openai` is not passed,
 ### Running from any directory
 
 `ocodex exec` allows running outside a Git repo by default. Use `--no-skip-git-repo-check` to enforce the check.
+
+### Web Search (Simple and MCP)
+
+`ocodex` supports two approaches to web search without relying on OpenAI:
+
+- Simple (shell + HTTP API): Provide keys via env and let the agent call `curl`.
+  - Google Programmable Search: set `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` in either `ocodex/.codex/.env` or your project `.env`.
+    The environment context includes a curl template like:
+    `curl -s "https://www.googleapis.com/customsearch/v1?key=$GOOGLE_API_KEY&cx=$GOOGLE_CSE_ID&q={QUERY}&num=5"`
+  - SerpAPI: set `SERPAPI_KEY`. The environment context includes:
+    `curl -s "https://serpapi.com/search.json?engine=google&q={QUERY}&api_key=$SERPAPI_KEY&num=5"`
+  - Tip: URL-encode queries: `ENC=$(printf '%s' "$QUERY" | jq -sRr @uri)`.
+
+- MCP (Model Context Protocol): Run a search MCP server and add it to `~/.codex/config.toml`:
+
+```
+[mcp_servers.search]
+command = "node"
+args = ["path/to/search-mcp-server.js"]
+[mcp_servers.search.env]
+API_KEY = "..."
+```
+
+Codex will advertise MCP tools to the model at startup. This yields structured tool calls (e.g., `search.query`) instead of raw shell.
+
+Note on network: `ocodex` defaults to `workspace-write` and enables outbound network by default unless you explicitly disable it via config. If your environment still blocks network, check your sandbox settings or CI runner.
+
+#### Example: Built-in simple MCP search server
+
+This repo includes a minimal MCP server script exposing a `search.query` tool:
+
+- Script: `codex-rs/scripts/mcp_websearch.js`
+- Implements: `initialize`, `tools/list` (tool call not required for detection)
+
+To configure ocodex to run it, add to `ocodex/.codex/config.toml`:
+
+```
+[mcp_servers.search]
+command = "node"
+args = ["/absolute/path/to/ocodex/codex-rs/scripts/mcp_websearch.js"]
+
+[mcp_servers.search.env]
+# Pass API keys explicitly; the MCP client runs with a clean env.
+GOOGLE_API_KEY = "..."
+GOOGLE_CSE_ID = "..."
+SERPAPI_KEY = "..." # optional
+```
+
+You can validate the server independently:
+
+```
+cd codex-rs
+cargo run -p codex-mcp-client -- node scripts/mcp_websearch.js
+```
+
+This should print a tools/list response containing `search.query`.

@@ -44,6 +44,19 @@ where
         codex_linux_sandbox::run_main();
     }
 
+    // If invoked as `ocodex` (or a platform-specific variant containing
+    // "ocodex"), prefer a repo-local CODEX_HOME baked in at build time so the
+    // binary can be moved and still find `ocodex/.codex`.
+    if exe_name.contains("ocodex") && std::env::var("CODEX_HOME").unwrap_or_default().is_empty() {
+        if let Some(repo_root) = option_env!("OCODEX_DEFAULT_REPO_ROOT") {
+            let candidate = Path::new(repo_root).join(".codex");
+            if candidate.is_dir() {
+                // Safe here – process is still single-threaded.
+                unsafe { std::env::set_var("CODEX_HOME", &candidate) };
+            }
+        }
+    }
+
     let argv1 = args.next().unwrap_or_default();
     if argv1 == CODEX_APPLY_PATCH_ARG1 {
         let patch_arg = args.next().and_then(|s| s.to_str().map(|s| s.to_owned()));

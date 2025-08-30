@@ -1,0 +1,17 @@
+# Reduce Docker build context size
+.git
+**/.git
+**/.github
+node_modules
+**/node_modules
+pnpm-lock.yaml
+pnpm-store
+**/.pnpm-store
+**/.turbo
+target
+**/target
+dist
+**/dist
+tmp
+**/*.log
+**/.DS_Store

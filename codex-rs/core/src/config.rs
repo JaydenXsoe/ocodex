@@ -20,7 +20,6 @@ use codex_login::AuthMode;
 use codex_protocol::config_types::ReasoningEffort;
 use codex_protocol::config_types::ReasoningSummary;
 use codex_protocol::config_types::SandboxMode;
-use dirs::home_dir;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -583,7 +582,7 @@ impl Config {
     /// Meant to be used exclusively for tests: `load_with_overrides()` should
     /// be used in all other cases.
     pub fn load_from_base_config_with_overrides(
-        cfg: ConfigToml,
+        mut cfg: ConfigToml,
         overrides: ConfigOverrides,
         codex_home: PathBuf,
     ) -> std::io::Result<Self> {
@@ -708,6 +707,59 @@ impl Config {
             .responses_originator_header_internal_override
             .unwrap_or(DEFAULT_RESPONSES_ORIGINATOR_HEADER.to_owned());
 
+        // Ensure the embedded MCP script is materialized so config can reference it.
+        let _ = write_embedded_mcp_websearch_to_disk(&codex_home);
+
+        // If no MCP servers are configured, opportunistically inject a
+        // self-contained websearch MCP server when API keys are present.
+        // Keys are read from either the process environment or CODEX_HOME/.env.
+        if !cfg.mcp_servers.contains_key("search") {
+            let mut candidate_env: std::collections::HashMap<String, String> =
+                load_env_from_file(codex_home.join(".env"));
+            // Merge in process env (wins over file values)
+            for k in ["GOOGLE_API_KEY", "GOOGLE_CSE_ID", "SERPAPI_KEY"] {
+                if let Ok(v) = std::env::var(k)
+                    && !v.is_empty()
+                {
+                    candidate_env.insert(k.to_string(), v);
+                }
+            }
+
+            let has_serp = candidate_env
+                .get("SERPAPI_KEY")
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+            let has_google = candidate_env
+                .get("GOOGLE_API_KEY")
+                .map(|v| !v.is_empty())
+                .unwrap_or(false)
+                && candidate_env
+                    .get("GOOGLE_CSE_ID")
+                    .map(|v| !v.is_empty())
+                    .unwrap_or(false);
+
+            if has_serp || has_google {
+                // Materialize the embedded JS to a file under CODEX_HOME so we can
+                // execute it reliably (avoids very long `-e` argv and quoting issues).
+                if let Ok(script_path) = write_embedded_mcp_websearch_to_disk(&codex_home) {
+                    if let Some(node_bin) = find_node_binary() {
+                        let default_server = McpServerConfig {
+                            command: node_bin.to_string_lossy().to_string(),
+                            args: vec![script_path.to_string_lossy().to_string()],
+                            env: Some(candidate_env),
+                        };
+                        cfg.mcp_servers.insert("search".to_string(), default_server);
+                    } else {
+                        tracing::warn!(
+                            "Node.js not found on PATH; skipping auto MCP websearch setup"
+                        );
+                    }
+                } else {
+                    tracing::warn!("Failed to write embedded MCP script; skipping auto setup");
+                }
+            }
+        }
+
         let config = Self {
             model,
             model_family,
@@ -830,6 +882,104 @@ impl Config {
     }
 }
 
+/// Load simple KEY=VALUE pairs from a file. Lines beginning with `#` are ignored.
+/// Only well-formed `NAME=VALUE` lines are returned; quotes around VALUE are trimmed.
+fn load_env_from_file(path: PathBuf) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return map;
+    };
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            let key = k.trim().to_string();
+            if key.is_empty() {
+                continue;
+            }
+            let mut val = v.trim().to_string();
+            if val.starts_with('"') && val.ends_with('"') && val.len() >= 2 {
+                val = val[1..val.len() - 1].to_string();
+            } else if val.starts_with('\'') && val.ends_with('\'') && val.len() >= 2 {
+                val = val[1..val.len() - 1].to_string();
+            }
+            map.insert(key, val);
+        }
+    }
+    map
+}
+
+/// Embedded minimal MCP websearch server implemented in JavaScript.
+/// It supports `initialize`, `tools/list`, and `tools/call` for `search.query`.
+/// Requires Node.js (v18+ recommended for global `fetch`).
+fn embedded_mcp_websearch_js() -> &'static str {
+    r#"(function(){
+const JSONRPC = '2.0';
+function w(m){process.stdout.write(JSON.stringify(m)+'\n');}
+function init(){return {jsonrpc:JSONRPC,result:{protocolVersion:(process.env.MCP_SCHEMA_VERSION||'2025-06-18'),serverInfo:{name:'mcp-websearch-simple',version:'0.2.0',title:'Web Search (Simple)'},capabilities:{tools:{listChanged:false}},instructions:undefined}}}
+function toolsList(){const hasSerp=!!process.env.SERPAPI_KEY;const hasGoogle=!!process.env.GOOGLE_API_KEY&&!!process.env.GOOGLE_CSE_ID;const engines=[hasGoogle?'google_cse':null,hasSerp?'serpapi':null].filter(Boolean);const desc=engines.length?`Web search using: ${engines.join(', ')}.`:'Web search (no API keys detected). Set GOOGLE_API_KEY+GOOGLE_CSE_ID or SERPAPI_KEY.';return {jsonrpc:JSONRPC,result:{tools:[{name:'search.query',description:desc,annotations:{openWorldHint:true,title:'Search the Web'},inputSchema:{type:'object',properties:{q:{type:'string',description:'Query string'},num:{type:'number',description:'Max results (default 5)'},site:{type:'string',description:'Optional site: filter'},engine:{type:'string',description:'serpapi|google_cse'},dateRestrict:{type:'string',description:'Google dateRestrict (d7,m1,y1)'}},required:['q'],additionalProperties:false}}]}}}
+async function callTool(args){const {q,num,site,engine,dateRestrict}=args||{};const n=(num&&Number(num))||5;const hasSerp=!!process.env.SERPAPI_KEY;const hasGoogle=!!process.env.GOOGLE_API_KEY&&!!process.env.GOOGLE_CSE_ID;let eng=engine; if(!eng){eng=hasSerp?'serpapi':(hasGoogle?'google_cse':null);} if(!eng){return {content:[{type:'text',text:'No search engine configured. Provide SERPAPI_KEY or GOOGLE_API_KEY+GOOGLE_CSE_ID.'}],isError:true};}
+try{
+  let items=[]; if(eng==='serpapi'){const base='https://serpapi.com/search.json';const params=new URLSearchParams({engine:'google',q:q||'',api_key:process.env.SERPAPI_KEY,num:String(n)}); if(site){params.set('q',`${q} site:${site}`);} const url=`${base}?${params}`; const res=await fetch(url); const json=await res.json(); items=(json.organic_results||[]).map(r=>({title:r.title,link:r.link,snippet:r.snippet||''}));}
+  else {const base='https://www.googleapis.com/customsearch/v1'; const params=new URLSearchParams({key:process.env.GOOGLE_API_KEY,cx:process.env.GOOGLE_CSE_ID,q:q||'',num:String(n)}); if(site){params.set('q',`${q} site:${site}`);} if(dateRestrict){params.set('dateRestrict',dateRestrict);} const url=`${base}?${params}`; const res=await fetch(url); const json=await res.json(); items=(json.items||[]).map(r=>({title:r.title,link:r.link,snippet:(r.snippet||'')}));}
+  if(!items.length){return {content:[{type:'text',text:'No results.'}]};}
+  const lines=items.slice(0,n).map((it,i)=>`${i+1}. ${it.title}\n   ${it.link}\n   ${it.snippet}`);
+  return {content:[{type:'text',text:lines.join('\n\n')}]};
+}catch(e){return {content:[{type:'text',text:`Search error: ${e?.message||e}` }],isError:true};}}
+const rl=require('readline').createInterface({input:process.stdin});
+rl.on('line',async line=>{let msg;try{msg=JSON.parse(line);}catch{return;} const {id,method,params}=msg||{}; if(!method)return; if(method==='initialize'){const r=init(); r.id=id; w(r); w({jsonrpc:JSONRPC,method:'notifications/initialized',params:null}); return;} if(method==='tools/list'){const r=toolsList(); r.id=id; w(r); return;} if(method==='tools/call'&&params&&params.name==='search.query'){const r=await callTool((params.arguments)||{}); w({jsonrpc:JSONRPC,id,result:r}); return;} if(id!==undefined){w({jsonrpc:JSONRPC,id,error:{code:-32601,message:`Method not implemented: ${method}`}});} });
+})();"#
+}
+
+/// Writes the embedded MCP websearch script to `$CODEX_HOME/mcp_websearch_embedded.js`.
+/// Returns the absolute path to the script.
+fn write_embedded_mcp_websearch_to_disk(codex_home: &Path) -> std::io::Result<PathBuf> {
+    let mut path = codex_home.to_path_buf();
+    std::fs::create_dir_all(&path)?;
+    path.push("mcp_websearch_embedded.js");
+    let contents = embedded_mcp_websearch_js();
+    // Only write if file missing or different to avoid unnecessary churn.
+    let should_write = match std::fs::read_to_string(&path) {
+        Ok(existing) => existing != contents,
+        Err(_) => true,
+    };
+    if should_write {
+        std::fs::write(&path, contents)?;
+    }
+    Ok(path)
+}
+
+fn find_node_binary() -> Option<PathBuf> {
+    // Prefer PATH lookup
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in path_var.split(':') {
+            let p = Path::new(dir).join("node");
+            if is_executable(&p) {
+                return Some(p);
+            }
+        }
+    }
+    // Common locations
+    for candidate in [
+        "/opt/homebrew/bin/node",
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+        "/bin/node",
+    ] {
+        let p = PathBuf::from(candidate);
+        if is_executable(&p) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn is_executable(p: &Path) -> bool {
+    std::fs::metadata(p).map(|m| m.is_file()).unwrap_or(false)
+}
+
 fn default_model() -> String {
     OPENAI_DEFAULT_MODEL.to_string()
 }
@@ -851,14 +1001,26 @@ pub fn find_codex_home() -> std::io::Result<PathBuf> {
         return PathBuf::from(val).canonicalize();
     }
 
-    let mut p = home_dir().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Could not find home directory",
-        )
-    })?;
-    p.push(".codex");
-    Ok(p)
+    // Resolve project-local Codex home by walking up from the current dir to
+    // find the nearest ancestor directory named "ocodex" and return
+    // `<that>/\.codex`. This ensures ocodex uses repo-local configuration and
+    // does not interfere with the official OpenAI Codex which relies on
+    // `~/.codex`.
+    if let Ok(mut dir) = std::env::current_dir() {
+        loop {
+            if dir.file_name().and_then(|s| s.to_str()) == Some("ocodex") {
+                return Ok(dir.join(".codex"));
+            }
+            if !dir.pop() {
+                break;
+            }
+        }
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "Could not locate project-local ocodex/.codex; set CODEX_HOME to override",
+    ))
 }
 
 /// Returns the path to the folder where Codex logs are stored. Does not verify

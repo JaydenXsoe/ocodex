@@ -89,10 +89,12 @@ pub async fn run_main(
             Some(AskForApproval::Never),
         )
     } else {
-        (
-            cli.sandbox_mode.map(Into::<SandboxMode>::into),
-            cli.approval_policy.map(Into::into),
-        )
+        // Default ocodex to workspace-write. Users can still override via CLI or config.
+        let mode = cli
+            .sandbox_mode
+            .map(Into::<SandboxMode>::into)
+            .unwrap_or(SandboxMode::WorkspaceWrite);
+        (Some(mode), cli.approval_policy.map(Into::into))
     };
 
     // When using `--oss`, let the bootstrapper pick the model (defaulting to
@@ -140,6 +142,13 @@ pub async fn run_main(
         }
     };
 
+    // Track whether caller explicitly set network access; used to avoid
+    // overriding an explicit user choice.
+    let has_net_override = cli_kv_overrides
+        .iter()
+        .any(|(k, _)| k == "sandbox_workspace_write.network_access");
+    // no injection here; we'll apply default after config loads if needed.
+
     let mut config = {
         // Load configuration and support CLI overrides.
 
@@ -152,6 +161,27 @@ pub async fn run_main(
             }
         }
     };
+
+    // Default to enabling network when using workspace-write unless the user
+    // explicitly provided a network override.
+    if !has_net_override {
+        if let codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+            writable_roots,
+            network_access,
+            exclude_tmpdir_env_var,
+            exclude_slash_tmp,
+        } = &config.sandbox_policy
+        {
+            if !network_access {
+                config.sandbox_policy = codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+                    writable_roots: writable_roots.clone(),
+                    network_access: true,
+                    exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
+                    exclude_slash_tmp: *exclude_slash_tmp,
+                };
+            }
+        }
+    }
 
     // Disallow OpenAI providers unless explicitly enabled via the CLI flag.
     if config.model_provider.requires_openai_auth && !cli.allow_openai {

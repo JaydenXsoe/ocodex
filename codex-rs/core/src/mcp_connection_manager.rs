@@ -126,6 +126,15 @@ impl McpConnectionManager {
                 continue;
             }
 
+            // Light logging to help debug spawn issues in the field.
+            info!(
+                server = %server_name,
+                command = %cfg.command,
+                args = ?cfg.args,
+                has_env = %cfg.env.as_ref().map(|m| !m.is_empty()).unwrap_or(false),
+                "spawning MCP server"
+            );
+
             join_set.spawn(async move {
                 let McpServerConfig { command, args, env } = cfg;
                 let client_res = McpClient::new_stdio_client(

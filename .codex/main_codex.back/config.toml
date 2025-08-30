@@ -1,0 +1,22 @@
+[projects]
+"/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs" = { trust_level = "trusted" }
+"/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/codex-rs" = { trust_level = "trusted" }
+"/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex" = { trust_level = "trusted" }
+
+[projects."/Users/kobra/Dev/Chatgpt-Apps/ocodex"]
+trust_level = "trusted"
+
+# IMPORTANT: the top-level key is `mcp_servers` rather than `mcpServers`.
+#[mcp_servers.server-name]
+#command = "npx"
+#args = ["-y", "mcp-server"]
+#env = { "API_KEY" = "value" }
+
+[mcp_servers.search]
+command = "node"
+args = ["~/Dev/Chatgpt-Apps/ocodex-labs/ocodex/codex-rs/scripts/mcp_websearch.js"]
+
+[mcp_servers.search.env]
+GOOGLE_API_KEY = "your-google-key"
+GOOGLE_CSE_ID = "your-cse-id"
+SERPAPI_KEY = "optional-serpapi-key"

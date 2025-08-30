@@ -93,7 +93,7 @@ impl McpClient {
             .envs(create_env_for_mcp_server(env))
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             // As noted in the `kill_on_drop` documentation, the Tokio runtime makes
             // a "best effort" to reap-after-exit to avoid zombie processes, but it
             // is not a guarantee.
@@ -111,6 +111,16 @@ impl McpClient {
 
         let (outgoing_tx, mut outgoing_rx) = mpsc::channel::<JSONRPCMessage>(CHANNEL_CAPACITY);
         let pending: Arc<Mutex<HashMap<i64, PendingSender>>> = Arc::new(Mutex::new(HashMap::new()));
+
+        // Spawn stderr reader to surface server errors.
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    error!("MCP server stderr: {}", line);
+                }
+            });
+        }
 
         // Spawn writer task. It listens on the `outgoing_rx` channel and
         // writes messages to the child's STDIN.

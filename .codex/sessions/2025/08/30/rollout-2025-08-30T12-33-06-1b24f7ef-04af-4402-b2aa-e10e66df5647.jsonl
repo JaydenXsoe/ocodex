@@ -1,0 +1,3 @@
+{"id":"1b24f7ef-04af-4402-b2aa-e10e66df5647","timestamp":"2025-08-30T12:33:06.953Z","instructions":null}
+{"record_type":"state"}
+{"type":"message","id":null,"role":"user","content":[{"type":"input_text","text":"<environment_context>\n  <cwd>/Users/kobra/Documents</cwd>\n  <approval_policy>on-request</approval_policy>\n  <sandbox_mode>workspace-write</sandbox_mode>\n  <network_access>enabled</network_access>\n  <shell>zsh</shell>\n</environment_context>"}]}

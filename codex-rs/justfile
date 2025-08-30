@@ -4,6 +4,14 @@ set positional-arguments
 help:
     just -l
 
+# Configure a local MCP server (project CODEX_HOME) from project .env
+setup-mcp-local:
+    bash -lc '../scripts/setup_mcp_from_env.sh --local --server search --command node --arg "$PWD/scripts/mcp_websearch.js" --env-key GOOGLE_API_KEY --env-key GOOGLE_CSE_ID --env-key SERPAPI_KEY'
+
+# Run ocodex with project-local CODEX_HOME and MCP config
+ocodex-local *args:
+    CODEX_HOME="$PWD/../ocodex/.codex" cargo run --bin ocodex -- "$@"
+
 # `codex`
 codex *args:
     cargo run --bin codex -- "$@"
