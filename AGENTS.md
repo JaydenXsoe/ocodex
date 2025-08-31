@@ -40,3 +40,4 @@ This repo uses snapshot tests (via `insta`), especially in `codex-rs/tui`, to va
 
 If you don’t have the tool:
 - `cargo install cargo-insta`
+

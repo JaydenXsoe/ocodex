@@ -47,9 +47,23 @@ RUN apk add --no-cache \
     libc6-compat \
  && update-ca-certificates \
  && adduser -D app
-USER app
-WORKDIR /work
+
+# Prepare a built-in toolpack so ocodex inside Docker has MCP servers by default.
+# This avoids requiring a project-local ocodex/.codex mount; orchestrator may override CODEX_HOME.
+RUN mkdir -p /usr/local/share/ocodex/.codex
+# Copy the entire toolpack directory from the repo so new tools are available automatically.
+COPY --from=builder /src/ocodex/.codex/ /usr/local/share/ocodex/.codex/
+
 # Copy the compiled static binary from the MUSL target directory
 COPY --from=builder /src/ocodex/codex-rs/target/aarch64-unknown-linux-musl/release/ocodex /usr/local/bin/ocodex
-ENV SHELL=/bin/bash
+
+# Default environment and working directory
+ENV SHELL=/bin/bash \
+    CODEX_HOME=/usr/local/share/ocodex/.codex
+WORKDIR /work
+
+# Ensure the non-root user owns binaries and config
+RUN chown -R app:app /usr/local/bin/ocodex /usr/local/share/ocodex
+USER app
+
 ENTRYPOINT ["/usr/local/bin/ocodex"]

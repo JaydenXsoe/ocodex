@@ -1,4 +1,3 @@
-
 [mcp_servers.search]
 command = "node"
 args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/.codex/mcp_websearch_embedded.js"]
@@ -6,3 +5,46 @@ args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/.codex/mcp_websearch_e
 SERPAPI_KEY = "817b1ba016d7f79ffdf2f0a4b39c91e40685602f0d3e337b9ae0d0d215f15997"
 GOOGLE_API_KEY = "AIzaSyCr-SR9hFlyI7wI7V3T2L5iBFFAAJH4X5g"
 GOOGLE_CSE_ID = "8192948a31da64f43"
+
+instructions = """
+    When freshness is uncertain or facts need verification, call the MCP tool search.query first, then answer with
+citations. Favor using search.query for current events, version/release details, pricing, CVEs, and live documentation.
+    """
+
+[mcp_servers.codeindex]
+command = "node"
+args = ["./mcp_codeindex.js"]
+instructions = """
+    Use code.search to find relevant files and lines. Then use code.read to fetch ranges before proposing changes.
+    Prefer small diffs and verify with build/test tools.
+    """
+
+[mcp_servers.build]
+command = "node"
+args = ["./mcp_build.js"]
+instructions = """
+    Use build.detect to choose the right strategy, build.run to compile, and test.run to validate changes.
+    Keep runs scoped; pass filters where supported.
+    """
+
+[mcp_servers.static]
+command = "node"
+args = ["./mcp_static.js"]
+instructions = """
+    Run lint.code to surface issues and format.code to auto-format changes. Fix lint failures before proposing patches.
+    """
+
+[mcp_servers.git]
+command = "node"
+args = ["./mcp_git.js"]
+instructions = """
+    Use git.status and git.diff to summarize pending changes and keep diffs focused and reviewable.
+    """
+
+[mcp_servers.todo]
+command = "node"
+args = ["./mcp_todo.js"]
+instructions = """
+    Use todo.scan to find TODO files (repo-wide or project), todo.next to pick the highest priority open tasks, and todo.update to mark items done as you complete them.
+    When running inside ocodex-labs/, prefer TODO_OCODEX_LABS.md as the source of truth.
+    """
