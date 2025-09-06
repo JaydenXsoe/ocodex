@@ -1,0 +1,25 @@
+approval_policy = "never"
+sandbox_mode    = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true
+
+[mcp_servers.codeindex]
+command = "node"
+args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/shared/build-simple-python-letter-ascii-script/.codex/mcp_codeindex.js"]
+
+
+[mcp_servers.build]
+command = "node"
+args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/shared/build-simple-python-letter-ascii-script/.codex/mcp_build.js"]
+
+
+[mcp_servers.static]
+command = "node"
+args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/shared/build-simple-python-letter-ascii-script/.codex/mcp_static.js"]
+
+
+[mcp_servers.git]
+command = "node"
+args = ["/Users/kobra/Dev/Chatgpt-Apps/ocodex-labs/ocodex/shared/build-simple-python-letter-ascii-script/.codex/mcp_git.js"]
+

@@ -1,8 +1,7 @@
-# Minimal Dockerfile to build and run the ocodex Rust binary in this repo.
-# It builds the crate in ocodex/ and sets it as entrypoint.
-
-FROM rust:1.89 as builder
-# Build dependencies (OpenSSL vendored build, MUSL toolchain for static binary)
+## Minimal Dockerfile to build and run the ocodex Rust binary in this repo.
+## Stage 1: Build static MUSL binary matching TARGETPLATFORM, and stage toolpack.
+FROM --platform=$BUILDPLATFORM rust:1.89-slim-bookworm AS builder
+ARG TARGETPLATFORM
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -12,17 +11,28 @@ RUN apt-get update \
         ca-certificates \
         git \
     && rm -rf /var/lib/apt/lists/*
-RUN rustup target add aarch64-unknown-linux-musl
+RUN set -eux; \
+    case "${TARGETPLATFORM}" in \
+      "linux/amd64")  RT=x86_64-unknown-linux-musl  ;; \
+      "linux/arm64")  RT=aarch64-unknown-linux-musl ;; \
+      *)               RT=x86_64-unknown-linux-musl  ;; \
+    esac; \
+    echo "$RT" > /tmp/RUST_TARGET; \
+    rustup target add "$RT"
 WORKDIR /src
-# Build using the contents of this directory (the Docker build context
-# is the "ocodex/" folder), then compile the Rust workspace under codex-rs.
+# Build using the contents of this directory (build context is the "ocodex/" folder)
 COPY . /src/ocodex
 WORKDIR /src/ocodex/codex-rs
-# Build the workspace binary named "ocodex" for MUSL (static linking)
-RUN cargo build --release --locked --bin ocodex --target aarch64-unknown-linux-musl
-#RUN cargo build --release --manifest-path ocodex/codex-rs/Cargo.toml --bin ocodex
+RUN set -eux; \
+    RT="$(cat /tmp/RUST_TARGET)"; \
+    cargo build --release --locked --bin ocodex --target "$RT"; \
+    install -D -m 0755 \
+      "/src/ocodex/codex-rs/target/${RT}/release/ocodex" \
+      "/out/ocodex"
 
+## Stage 2: Runtime image
 FROM alpine:3.20
+ARG TARGETPLATFORM
 # Install a modern baseline of tools commonly needed by the agent
 RUN apk add --no-cache \
     bash \
@@ -34,7 +44,7 @@ RUN apk add --no-cache \
     ripgrep \
     fd \
     git \
-    openssh \
+    #openssh \
     tzdata \
     python3 \
     py3-pip \
@@ -52,10 +62,10 @@ RUN apk add --no-cache \
 # This avoids requiring a project-local ocodex/.codex mount; orchestrator may override CODEX_HOME.
 RUN mkdir -p /usr/local/share/ocodex/.codex
 # Copy the entire toolpack directory from the repo so new tools are available automatically.
-COPY --from=builder /src/ocodex/.codex/ /usr/local/share/ocodex/.codex/
+COPY --from=0 /src/ocodex/.codex/ /usr/local/share/ocodex/.codex/
 
-# Copy the compiled static binary from the MUSL target directory
-COPY --from=builder /src/ocodex/codex-rs/target/aarch64-unknown-linux-musl/release/ocodex /usr/local/bin/ocodex
+# Copy the compiled static binary from the builder's stable output path
+COPY --from=0 /out/ocodex /usr/local/bin/ocodex
 
 # Default environment and working directory
 ENV SHELL=/bin/bash \
@@ -66,4 +76,5 @@ WORKDIR /work
 RUN chown -R app:app /usr/local/bin/ocodex /usr/local/share/ocodex
 USER app
 
+# Run the installed binary (copied to /usr/local/bin/ocodex in this image)
 ENTRYPOINT ["/usr/local/bin/ocodex"]

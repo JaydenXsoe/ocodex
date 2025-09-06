@@ -760,6 +760,37 @@ impl Config {
             }
         }
 
+        // Resolve any relative MCP server script paths against CODEX_HOME so
+        // `args = ["./mcp_foo.js"]` works regardless of process cwd.
+        // Also resolve a relative `command` path if present (e.g., "./server.sh").
+        for (_name, server_cfg) in cfg.mcp_servers.iter_mut() {
+            // Fix up args that reference files under CODEX_HOME
+            let mut new_args = Vec::with_capacity(server_cfg.args.len());
+            for a in server_cfg.args.iter() {
+                let arg_path = std::path::Path::new(a);
+                if arg_path.is_absolute() {
+                    new_args.push(a.clone());
+                    continue;
+                }
+                let candidate = codex_home.join(a);
+                if candidate.exists() {
+                    new_args.push(candidate.to_string_lossy().to_string());
+                } else {
+                    new_args.push(a.clone());
+                }
+            }
+            server_cfg.args = new_args;
+
+            // Fix up a relative command that lives under CODEX_HOME
+            let cmd_path = std::path::Path::new(&server_cfg.command);
+            if !cmd_path.is_absolute() && server_cfg.command.contains(std::path::MAIN_SEPARATOR) {
+                let candidate = codex_home.join(&server_cfg.command);
+                if candidate.exists() {
+                    server_cfg.command = candidate.to_string_lossy().to_string();
+                }
+            }
+        }
+
         let config = Self {
             model,
             model_family,
@@ -916,20 +947,20 @@ fn load_env_from_file(path: PathBuf) -> std::collections::HashMap<String, String
 /// Requires Node.js (v18+ recommended for global `fetch`).
 fn embedded_mcp_websearch_js() -> &'static str {
     r#"(function(){
-const JSONRPC = '2.0';
+const JSONRPC='2.0';
 function w(m){process.stdout.write(JSON.stringify(m)+'\n');}
-function init(){return {jsonrpc:JSONRPC,result:{protocolVersion:(process.env.MCP_SCHEMA_VERSION||'2025-06-18'),serverInfo:{name:'mcp-websearch-simple',version:'0.2.0',title:'Web Search (Simple)'},capabilities:{tools:{listChanged:false}},instructions:undefined}}}
-function toolsList(){const hasSerp=!!process.env.SERPAPI_KEY;const hasGoogle=!!process.env.GOOGLE_API_KEY&&!!process.env.GOOGLE_CSE_ID;const engines=[hasGoogle?'google_cse':null,hasSerp?'serpapi':null].filter(Boolean);const desc=engines.length?`Web search using: ${engines.join(', ')}.`:'Web search (no API keys detected). Set GOOGLE_API_KEY+GOOGLE_CSE_ID or SERPAPI_KEY.';return {jsonrpc:JSONRPC,result:{tools:[{name:'search.query',description:desc,annotations:{openWorldHint:true,title:'Search the Web'},inputSchema:{type:'object',properties:{q:{type:'string',description:'Query string'},num:{type:'number',description:'Max results (default 5)'},site:{type:'string',description:'Optional site: filter'},engine:{type:'string',description:'serpapi|google_cse'},dateRestrict:{type:'string',description:'Google dateRestrict (d7,m1,y1)'}},required:['q'],additionalProperties:false}}]}}}
-async function callTool(args){const {q,num,site,engine,dateRestrict}=args||{};const n=(num&&Number(num))||5;const hasSerp=!!process.env.SERPAPI_KEY;const hasGoogle=!!process.env.GOOGLE_API_KEY&&!!process.env.GOOGLE_CSE_ID;let eng=engine; if(!eng){eng=hasSerp?'serpapi':(hasGoogle?'google_cse':null);} if(!eng){return {content:[{type:'text',text:'No search engine configured. Provide SERPAPI_KEY or GOOGLE_API_KEY+GOOGLE_CSE_ID.'}],isError:true};}
-try{
-  let items=[]; if(eng==='serpapi'){const base='https://serpapi.com/search.json';const params=new URLSearchParams({engine:'google',q:q||'',api_key:process.env.SERPAPI_KEY,num:String(n)}); if(site){params.set('q',`${q} site:${site}`);} const url=`${base}?${params}`; const res=await fetch(url); const json=await res.json(); items=(json.organic_results||[]).map(r=>({title:r.title,link:r.link,snippet:r.snippet||''}));}
-  else {const base='https://www.googleapis.com/customsearch/v1'; const params=new URLSearchParams({key:process.env.GOOGLE_API_KEY,cx:process.env.GOOGLE_CSE_ID,q:q||'',num:String(n)}); if(site){params.set('q',`${q} site:${site}`);} if(dateRestrict){params.set('dateRestrict',dateRestrict);} const url=`${base}?${params}`; const res=await fetch(url); const json=await res.json(); items=(json.items||[]).map(r=>({title:r.title,link:r.link,snippet:(r.snippet||'')}));}
-  if(!items.length){return {content:[{type:'text',text:'No results.'}]};}
-  const lines=items.slice(0,n).map((it,i)=>`${i+1}. ${it.title}\n   ${it.link}\n   ${it.snippet}`);
-  return {content:[{type:'text',text:lines.join('\n\n')}]};
-}catch(e){return {content:[{type:'text',text:`Search error: ${e?.message||e}` }],isError:true};}}
+function init(){return{jsonrpc:JSONRPC,result:{protocolVersion:(process.env.MCP_SCHEMA_VERSION||'2025-06-18'),serverInfo:{name:'mcp-websearch-simple',version:'0.3.0',title:'Web Search (Simple)'},capabilities:{tools:{listChanged:false}},instructions:undefined}}}
+function toolsList(){const hasSerp=!!process.env.SERPAPI_KEY;const hasGoogle=!!process.env.GOOGLE_API_KEY&&!!process.env.GOOGLE_CSE_ID;const engines=[hasGoogle?'google_cse':null,hasSerp?'serpapi':null].filter(Boolean);const desc=engines.length?`Web search using: ${engines.join(', ')}.`:'Web search (no API keys detected). Set GOOGLE_API_KEY+GOOGLE_CSE_ID or SERPAPI_KEY.';return{jsonrpc:JSONRPC,result:{tools:[{name:'search.query',description:desc,annotations:{openWorldHint:true,title:'Search the Web'},inputSchema:{type:'object',properties:{q:{type:'string',description:'Query string'},num:{type:'number',description:'Max results (default 5)'},site:{type:'string',description:'Optional site: filter'},engine:{type:'string',description:'serpapi|google_cse|google'},dateRestrict:{type:'string',description:'Google dateRestrict (d7,m1,y1)'}},required:['q'],additionalProperties:false}}]}}}
+async function callTool(args){const{q,num,site,engine,dateRestrict}=args||{};const n=(num&&Number(num))||5;const hasSerp=!!process.env.SERPAPI_KEY;const hasGoogle=!!process.env.GOOGLE_API_KEY&&!!process.env.GOOGLE_CSE_ID;let eng=(engine||'').toLowerCase();if(eng==='google'){eng='google_cse';}if(!eng){eng=hasGoogle?'google_cse':(hasSerp?'serpapi':null);}if(!eng){return{content:[{type:'text',text:'No search engine configured. Provide SERPAPI_KEY or GOOGLE_API_KEY+GOOGLE_CSE_ID.'}],isError:true};}
+try{const doSerpapi=async()=>{const base='https://serpapi.com/search.json';const params=new URLSearchParams({engine:'google',q:q||'',api_key:process.env.SERPAPI_KEY,num:String(n)});if(site){params.set('q',`${q} site:${site}`);}const url=`${base}?${params}`;const res=await fetch(url);let json;try{json=await res.json();}catch{json=null;}if(!res.ok){const errText=(json&&json.error)||res.statusText||String(res.status);throw new Error(`SerpAPI HTTP ${res.status}: ${errText}`);}if(json&&json.error){throw new Error(`SerpAPI error: ${json.error}`);}return (json&&json.organic_results||[]).map(r=>({title:r.title,link:r.link,snippet:r.snippet||''}));};
+const doGoogle=async()=>{const base='https://www.googleapis.com/customsearch/v1';const params=new URLSearchParams({key:process.env.GOOGLE_API_KEY,cx:process.env.GOOGLE_CSE_ID,q:q||'',num:String(n)});if(site){params.set('q',`${q} site:${site}`);}if(dateRestrict){params.set('dateRestrict',dateRestrict);}const url=`${base}?${params}`;const res=await fetch(url);let json;try{json=await res.json();}catch{json=null;}if(!res.ok){const errText=(json&&json.error&&json.error.message)||res.statusText||String(res.status);throw new Error(`Google CSE HTTP ${res.status}: ${errText}`);}if(json&&json.error){throw new Error(`Google CSE error: ${(json.error&&json.error.message)||'unknown'}`);}return (json&&json.items||[]).map(r=>({title:r.title,link:r.link,snippet:(r.snippet||'')}));};
+let items=[];if(eng==='serpapi'){items=hasSerp?await doSerpapi():[];if(!items.length&&hasGoogle){items=await doGoogle();}}
+else{items=hasGoogle?await doGoogle():[];if(!items.length&&hasSerp){items=await doSerpapi();}}
+if(!items.length){return{content:[{type:'text',text:'No results.'}]};}
+const lines=items.slice(0,n).map((it,i)=>`${i+1}. ${it.title}\n   ${it.link}\n   ${it.snippet}`);return{content:[{type:'text',text:lines.join('\n\n')}]};
+}catch(e){return{content:[{type:'text',text:`Search error: ${e&&e.message?e.message:e}` }],isError:true};}}
 const rl=require('readline').createInterface({input:process.stdin});
-rl.on('line',async line=>{let msg;try{msg=JSON.parse(line);}catch{return;} const {id,method,params}=msg||{}; if(!method)return; if(method==='initialize'){const r=init(); r.id=id; w(r); w({jsonrpc:JSONRPC,method:'notifications/initialized',params:null}); return;} if(method==='tools/list'){const r=toolsList(); r.id=id; w(r); return;} if(method==='tools/call'&&params&&params.name==='search.query'){const r=await callTool((params.arguments)||{}); w({jsonrpc:JSONRPC,id,result:r}); return;} if(id!==undefined){w({jsonrpc:JSONRPC,id,error:{code:-32601,message:`Method not implemented: ${method}`}});} });
+rl.on('line',async line=>{let msg;try{msg=JSON.parse(line);}catch{return;}const{id,method,params}=msg||{};if(!method)return;if(method==='initialize'){const r=init();r.id=id;w(r);w({jsonrpc:JSONRPC,method:'notifications/initialized',params:null});return;}if(method==='tools/list'){const r=toolsList();r.id=id;w(r);return;}if(method==='tools/call'&&params&&params.name==='search.query'){const r=await callTool((params.arguments)||{});w({jsonrpc:JSONRPC,id,result:r});return;}if(id!==undefined){w({jsonrpc:JSONRPC,id,error:{code:-32601,message:`Method not implemented: ${method}`}});}});
 })();"#
 }
 
@@ -993,19 +1024,16 @@ fn default_model() -> String {
 /// - If `CODEX_HOME` is not set, this function does not verify that the
 ///   directory exists.
 pub fn find_codex_home() -> std::io::Result<PathBuf> {
-    // Honor the `CODEX_HOME` environment variable when it is set to allow users
-    // (and tests) to override the default location.
+    // 1) Explicit override via CODEX_HOME
     if let Ok(val) = std::env::var("CODEX_HOME")
         && !val.is_empty()
     {
-        return PathBuf::from(val).canonicalize();
+        let p = PathBuf::from(&val);
+        let resolved = p.canonicalize().unwrap_or(p);
+        return Ok(resolved);
     }
 
-    // Resolve project-local Codex home by walking up from the current dir to
-    // find the nearest ancestor directory named "ocodex" and return
-    // `<that>/\.codex`. This ensures ocodex uses repo-local configuration and
-    // does not interfere with the official OpenAI Codex which relies on
-    // `~/.codex`.
+    // 2) Repo-local: walk up until we find an `ocodex` dir, then use `<that>/.codex`
     if let Ok(mut dir) = std::env::current_dir() {
         loop {
             if dir.file_name().and_then(|s| s.to_str()) == Some("ocodex") {
@@ -1017,9 +1045,20 @@ pub fn find_codex_home() -> std::io::Result<PathBuf> {
         }
     }
 
+    // 3) Global toolpack inside container images
+    let global_toolpack = PathBuf::from("/usr/local/share/ocodex/.codex");
+    if global_toolpack.is_dir() {
+        return Ok(global_toolpack);
+    }
+
+    // 4) Fallback to ~/.codex (do not require it to exist)
+    if let Some(home) = dirs::home_dir() {
+        return Ok(home.join(".codex"));
+    }
+
     Err(std::io::Error::new(
         std::io::ErrorKind::NotFound,
-        "Could not locate project-local ocodex/.codex; set CODEX_HOME to override",
+        "Could not determine CODEX_HOME; set CODEX_HOME explicitly",
     ))
 }
 

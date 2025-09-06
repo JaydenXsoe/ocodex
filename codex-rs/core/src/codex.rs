@@ -1197,13 +1197,12 @@ async fn submission_loop(
 
                     // Recompute provider detection in this scope
                     let is_ollama_like_provider = {
-                        let mut ok = config.model_provider_id
-                            == crate::BUILT_IN_OSS_MODEL_PROVIDER_ID;
+                        let mut ok =
+                            config.model_provider_id == crate::BUILT_IN_OSS_MODEL_PROVIDER_ID;
                         if !ok {
                             if let Some(base) = provider.base_url.as_deref() {
                                 let b = base.to_lowercase();
-                                ok = b.contains("localhost:11434")
-                                    || b.contains("127.0.0.1:11434");
+                                ok = b.contains("localhost:11434") || b.contains("127.0.0.1:11434");
                             }
                             if !ok {
                                 ok = provider.name.to_lowercase().contains("ollama");

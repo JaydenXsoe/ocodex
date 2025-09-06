@@ -100,7 +100,7 @@ This folder is the root of a Cargo workspace. It contains quite a bit of experim
 The workspace produces an `ocodex` binary alongside `codex` with local-first defaults:
 
 - Provider: `oss` (Ollama-compatible)
-- Model: `gpt-oss:20b`
+- Model: dynamic default for `--oss` (>= 64 GiB RAM prefers `gpt-oss:120b`, otherwise `gpt-oss:20b`). Override with `-m`.
 - OpenAI usage: disabled by default; enable with `--openai`
   (For OpenAI providers, you can disable client-side rate-limit waits with `CODEX_DISABLE_RATE_LIMITS=1`.)
 
@@ -197,3 +197,9 @@ cargo run -p codex-mcp-client -- node scripts/mcp_websearch.js
 ```
 
 This should print a tools/list response containing `search.query`.
+
+### Models and Ollama deployment
+
+For detailed guidance on choosing models, resource tradeoffs, and multiple Ollama deployment patterns (local, Docker, Kubernetes, network-mounted storage, SSH tunnels), see:
+
+- ../../docs/models-and-ollama-deployment.md

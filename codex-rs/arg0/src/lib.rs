@@ -48,11 +48,18 @@ where
     // "ocodex"), prefer a repo-local CODEX_HOME baked in at build time so the
     // binary can be moved and still find `ocodex/.codex`.
     if exe_name.contains("ocodex") && std::env::var("CODEX_HOME").unwrap_or_default().is_empty() {
+        // Prefer a repo-local CODEX_HOME baked at build time
         if let Some(repo_root) = option_env!("OCODEX_DEFAULT_REPO_ROOT") {
             let candidate = Path::new(repo_root).join(".codex");
             if candidate.is_dir() {
-                // Safe here – process is still single-threaded.
                 unsafe { std::env::set_var("CODEX_HOME", &candidate) };
+            }
+        }
+        // If still unset, prefer the global toolpack location inside containers
+        if std::env::var("CODEX_HOME").unwrap_or_default().is_empty() {
+            let global = Path::new("/usr/local/share/ocodex/.codex");
+            if global.is_dir() {
+                unsafe { std::env::set_var("CODEX_HOME", &global) };
             }
         }
     }

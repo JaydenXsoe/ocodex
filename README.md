@@ -357,8 +357,8 @@ Codex can run fully locally against an OpenAI-compatible OSS host (like Ollama) 
 
 Model selection when using `--oss`:
 
-- If you omit `-m/--model`, Codex defaults to -m gpt-oss:20b and will verify it exists locally (downloading if needed).
-- To pick a different size, pass one of:
+- If you omit `-m/--model`, Codex picks a dynamic default based on host resources (>= 64 GiB RAM prefers `gpt-oss:120b`, otherwise `gpt-oss:20b`) and will verify it exists locally (downloading if needed).
+- To pick a specific size, pass one of:
   - -m "gpt-oss:20b"
   - -m "gpt-oss:120b"
 
@@ -378,6 +378,10 @@ Advanced: you can persist this in your config instead of environment variables b
 name = "Open Source"
 base_url = "http://my-ollama.example.com:11434/v1"
 ```
+
+See also: Models and Ollama Deployment Guide for efficiency, deployment, and tuning tips:
+
+- docs/models-and-ollama-deployment.md
 
 ---
 

@@ -12,6 +12,12 @@ Codex supports several mechanisms for setting config values:
 
 Both the `--config` flag and the `config.toml` file support the following options:
 
+## Choosing models
+
+For guidance on selecting models by task, understanding resource tradeoffs, and running/deploying Ollama efficiently (local, Docker, Kubernetes, remote with SSH tunnel, network-mounted storage), see:
+
+- ../docs/models-and-ollama-deployment.md
+
 ## model
 
 The model that Codex should use.

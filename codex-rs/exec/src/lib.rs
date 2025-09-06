@@ -21,7 +21,7 @@ use codex_core::protocol::Op;
 use codex_core::protocol::TaskCompleteEvent;
 use codex_core::util::is_inside_git_repo;
 use codex_login::AuthManager;
-use codex_ollama::DEFAULT_OSS_MODEL;
+use codex_ollama::dynamic_default_oss_model;
 use codex_protocol::config_types::SandboxMode;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
 use event_processor_with_json_output::EventProcessorWithJsonOutput;
@@ -123,13 +123,14 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         )
     };
 
-    // When using `--oss`, let the bootstrapper pick the model (defaulting to
-    // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
+    // When using `--oss`, let the bootstrapper pick the model (dynamically
+    // based on host resources, falling back to gpt-oss:20b) and ensure it is
+    // present locally. Also, force the built‑in
     // `oss` model provider.
     let model = if let Some(model) = model_cli_arg {
         Some(model)
     } else if oss {
-        Some(DEFAULT_OSS_MODEL.to_owned())
+        Some(dynamic_default_oss_model().to_owned())
     } else {
         None // No model specified, will use the default.
     };
@@ -176,23 +177,21 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
 
     // Default to enabling network when using workspace-write unless the user
     // explicitly provided a network override.
-    if !has_net_override {
-        if let codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+    if !has_net_override
+        && let codex_core::protocol::SandboxPolicy::WorkspaceWrite {
             writable_roots,
             network_access,
             exclude_tmpdir_env_var,
             exclude_slash_tmp,
         } = &config.sandbox_policy
-        {
-            if !network_access {
-                config.sandbox_policy = codex_core::protocol::SandboxPolicy::WorkspaceWrite {
-                    writable_roots: writable_roots.clone(),
-                    network_access: true,
-                    exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
-                    exclude_slash_tmp: *exclude_slash_tmp,
-                };
-            }
-        }
+        && !network_access
+    {
+        config.sandbox_policy = codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+            writable_roots: writable_roots.clone(),
+            network_access: true,
+            exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
+            exclude_slash_tmp: *exclude_slash_tmp,
+        };
     }
 
     // Disallow OpenAI providers unless explicitly enabled via the CLI flag.

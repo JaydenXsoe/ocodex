@@ -1,0 +1,1 @@
+- [ ] Fix mcp tools access error for global bin example: /usr/local/bin/ocodex, by allowing for searching for the tools within ocodex/.codex (build hardcoded path will be problematic for docker) so?
