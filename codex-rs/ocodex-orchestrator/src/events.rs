@@ -7,6 +7,10 @@ pub const EVENT_SCHEMA_VERSION: u32 = 1;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventKind { Info, Warn, Error, Progress }
 
+impl Default for EventKind {
+    fn default() -> Self { EventKind::Info }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Event {
     pub kind: EventKind,

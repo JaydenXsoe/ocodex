@@ -4,13 +4,21 @@ version = "0.0.0"
 edition = "2024"
 
 [features]
-default = []
+default = ["labs-compat"]
 tui = []
-sqlite-memory = []
+sqlite-memory = ["dep:rusqlite", "dep:chrono"]
 pty = []
 qc-http = ["ureq/json"]
+llm-http = ["ureq/json"]
+labs-compat = ["dep:orchestrator"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = { version = "2", optional = true, default-features = true, features = ["json"] }
+rusqlite = { version = "0.31", optional = true, features = ["bundled"] }
+chrono = { version = "0.4", optional = true, default-features = true, features = ["clock"] }
+
+[dependencies.orchestrator]
+path = "../../../orchestrator"
+optional = true

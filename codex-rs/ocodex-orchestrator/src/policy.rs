@@ -11,12 +11,11 @@ pub struct NoopExecutionPolicy;
 
 impl ExecutionPolicy for NoopExecutionPolicy {
     fn before_task(&self, task: &Task, events: &Arc<dyn EventBus + Send + Sync>) -> Result<(), String> {
-        events.publish(Event { kind: EventKind::Info, message: format!("policy:before:{}", task.id) });
+        events.publish(Event { kind: EventKind::Info, message: format!("policy:before:{}", task.id), ..Default::default() });
         Ok(())
     }
     fn after_task(&self, task: &Task, events: &Arc<dyn EventBus + Send + Sync>) -> Result<(), String> {
-        events.publish(Event { kind: EventKind::Info, message: format!("policy:after:{}", task.id) });
+        events.publish(Event { kind: EventKind::Info, message: format!("policy:after:{}", task.id), ..Default::default() });
         Ok(())
     }
 }
-
