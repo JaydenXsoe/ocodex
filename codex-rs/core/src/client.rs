@@ -21,6 +21,7 @@ use tracing::trace;
 use tracing::warn;
 use uuid::Uuid;
 
+use crate::anthropic::call_anthropic;
 use crate::chat_completions::AggregateStreamExt;
 use crate::chat_completions::stream_chat_completions;
 use crate::client_common::Prompt;
@@ -34,6 +35,7 @@ use crate::error::CodexErr;
 use crate::error::Result;
 use crate::error::UsageLimitReachedError;
 use crate::flags::CODEX_RS_SSE_FIXTURE;
+use crate::gemini::call_gemini;
 use crate::model_family::ModelFamily;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::model_provider_info::WireApi;
@@ -135,6 +137,27 @@ impl ModelClient {
                 });
 
                 Ok(ResponseStream { rx_event: rx })
+            }
+            WireApi::Anthropic => {
+                call_anthropic(
+                    prompt,
+                    &self.config.model_family,
+                    &self.client,
+                    &self.provider,
+                    &self.config.model,
+                    self.config.model_max_output_tokens,
+                )
+                .await
+            }
+            WireApi::Gemini => {
+                call_gemini(
+                    prompt,
+                    &self.config.model_family,
+                    &self.client,
+                    &self.provider,
+                    &self.config.model,
+                )
+                .await
             }
         }
     }

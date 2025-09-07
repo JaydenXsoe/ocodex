@@ -1033,6 +1033,12 @@ pub fn find_codex_home() -> std::io::Result<PathBuf> {
         return Ok(resolved);
     }
 
+    // 1b) If running inside a container (Docker/OCI), default to the global-share
+    // toolpack location so the binary does not require extra flags to pick it.
+    if is_container_env() {
+        return Ok(PathBuf::from("/usr/local/share/ocodex/.codex"));
+    }
+
     // 2) Repo-local: walk up until we find an `ocodex` dir, then use `<that>/.codex`
     if let Ok(mut dir) = std::env::current_dir() {
         loop {
@@ -1060,6 +1066,30 @@ pub fn find_codex_home() -> std::io::Result<PathBuf> {
         std::io::ErrorKind::NotFound,
         "Could not determine CODEX_HOME; set CODEX_HOME explicitly",
     ))
+}
+
+/// Heuristic detection for common container environments (Docker/Podman/K8s).
+fn is_container_env() -> bool {
+    // Well-known marker files
+    if Path::new("/.dockerenv").exists() || Path::new("/.containerenv").exists() {
+        return true;
+    }
+    // Environment variables set by some runtimes
+    if std::env::var("container").is_ok() {
+        return true;
+    }
+    // Inspect cgroup membership (pid 1 in container often shows docker/kubepods)
+    if let Ok(contents) = std::fs::read_to_string("/proc/1/cgroup") {
+        let lower = contents.to_ascii_lowercase();
+        if lower.contains("docker")
+            || lower.contains("containerd")
+            || lower.contains("kubepods")
+            || lower.contains("podman")
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Returns the path to the folder where Codex logs are stored. Does not verify

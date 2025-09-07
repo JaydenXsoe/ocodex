@@ -888,7 +888,20 @@ impl ChatWidget {
 
         let mut items: Vec<SelectionItem> = Vec::new();
         for preset in presets.iter() {
-            let name = preset.label.to_string();
+            let mut name = preset.label.to_string();
+            // Compute implied backend and availability based on API key presence.
+            let provider_id =
+                codex_core::model_provider_info::default_provider_for_model_slug(preset.model)
+                    .unwrap_or(self.config.model_provider_id.as_str());
+            let has_key = self
+                .config
+                .model_providers
+                .get(provider_id)
+                .map(|p| p.api_key().is_ok())
+                .unwrap_or(false);
+            if !has_key {
+                name.push_str(" (missing API key)");
+            }
             let description = Some(preset.description.to_string());
             let is_current = preset.model == current_model && preset.effort == current_effort;
             let model_slug = preset.model.to_string();

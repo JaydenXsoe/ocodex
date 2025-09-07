@@ -38,6 +38,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         images,
         model: model_cli_arg,
         oss,
+        backend,
         allow_openai,
         config_profile,
         full_auto,
@@ -138,7 +139,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     let model_provider = if oss {
         Some(BUILT_IN_OSS_MODEL_PROVIDER_ID.to_string())
     } else {
-        None // No specific model provider override.
+        backend
     };
 
     // Load configuration and determine approval policy

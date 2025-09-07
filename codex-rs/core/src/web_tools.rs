@@ -58,16 +58,18 @@ pub async fn web_search(args: WebSearchArgs) -> anyhow::Result<String> {
     }
     fn choose_provider() -> Provider {
         if let Ok(key) = std::env::var("SERPAPI_KEY")
-            && !key.trim().is_empty() {
-                return Provider::SerpApi { key };
-            }
+            && !key.trim().is_empty()
+        {
+            return Provider::SerpApi { key };
+        }
         if let (Ok(key), Ok(cx)) = (
             std::env::var("GOOGLE_CSE_KEY"),
             std::env::var("GOOGLE_CSE_CX"),
-        )
-            && !key.trim().is_empty() && !cx.trim().is_empty() {
-                return Provider::GoogleCse { key, cx };
-            }
+        ) && !key.trim().is_empty()
+            && !cx.trim().is_empty()
+        {
+            return Provider::GoogleCse { key, cx };
+        }
         Provider::DuckDuckGo
     }
 

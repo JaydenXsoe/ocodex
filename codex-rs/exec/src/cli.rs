@@ -14,6 +14,10 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
+    /// Backend/provider id to use (e.g., openai, xai, anthropic, google, oss).
+    #[arg(long = "backend")]
+    pub backend: Option<String>,
+
     #[arg(long = "oss", default_value_t = false)]
     pub oss: bool,
 

@@ -17,6 +17,10 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
+    /// Backend/provider id to use (e.g., openai, xai, anthropic, google, oss).
+    #[arg(long = "backend")]
+    pub backend: Option<String>,
+
     /// Allow using OpenAI providers. Disabled by default.
     #[arg(long = "openai", default_value_t = false)]
     pub allow_openai: bool,

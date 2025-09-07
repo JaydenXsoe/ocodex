@@ -49,6 +49,72 @@ pub fn builtin_model_presets() -> &'static [ModelPreset] {
             model: "gpt-5",
             effort: ReasoningEffort::High,
         },
+        // xAI Grok 4 presets
+        ModelPreset {
+            id: "grok-4-minimal",
+            label: "grok-4 minimal",
+            description: "— fast responses; good for quick iterations",
+            model: "grok-4",
+            effort: ReasoningEffort::Minimal,
+        },
+        ModelPreset {
+            id: "grok-4-medium",
+            label: "grok-4 medium",
+            description: "— balanced depth and speed",
+            model: "grok-4",
+            effort: ReasoningEffort::Medium,
+        },
+        ModelPreset {
+            id: "grok-4-high",
+            label: "grok-4 high",
+            description: "— deeper reasoning for complex tasks",
+            model: "grok-4",
+            effort: ReasoningEffort::High,
+        },
+        // Claude presets
+        ModelPreset {
+            id: "claude-3-5-sonnet-minimal",
+            label: "claude-3.5-sonnet minimal",
+            description: "— speedy replies using Claude 3.5 Sonnet",
+            model: "claude-3-5-sonnet",
+            effort: ReasoningEffort::Minimal,
+        },
+        ModelPreset {
+            id: "claude-3-5-sonnet-medium",
+            label: "claude-3.5-sonnet medium",
+            description: "— balanced for general tasks",
+            model: "claude-3-5-sonnet",
+            effort: ReasoningEffort::Medium,
+        },
+        ModelPreset {
+            id: "claude-3-5-sonnet-high",
+            label: "claude-3.5-sonnet high",
+            description: "— deeper reasoning for complex problems",
+            model: "claude-3-5-sonnet",
+            effort: ReasoningEffort::High,
+        },
+        // Google Gemini presets
+        ModelPreset {
+            id: "gemini-1-5-pro-minimal",
+            label: "gemini-1.5-pro minimal",
+            description: "— fast responses with Gemini 1.5 Pro",
+            model: "gemini-1.5-pro",
+            effort: ReasoningEffort::Minimal,
+        },
+        ModelPreset {
+            id: "gemini-1-5-pro-medium",
+            label: "gemini-1.5-pro medium",
+            description: "— balanced depth and speed",
+            model: "gemini-1.5-pro",
+            effort: ReasoningEffort::Medium,
+        },
+        ModelPreset {
+            id: "gemini-1-5-pro-high",
+            label: "gemini-1.5-pro high",
+            description: "— deeper reasoning for complex tasks",
+            model: "gemini-1.5-pro",
+            effort: ReasoningEffort::High,
+        },
     ];
     PRESETS
 }

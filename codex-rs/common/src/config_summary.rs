@@ -12,6 +12,12 @@ pub fn create_config_summary_entries(config: &Config) -> Vec<(&'static str, Stri
         ("approval", config.approval_policy.to_string()),
         ("sandbox", summarize_sandbox_policy(&config.sandbox_policy)),
     ];
+    // Indicate whether a provider API key is present when one is required.
+    let auth_status = match config.model_provider.api_key() {
+        Ok(_) => "ok".to_string(),
+        Err(_) => "missing".to_string(),
+    };
+    entries.push(("provider_auth", auth_status));
     if config.model_provider.wire_api == WireApi::Responses
         && config.model_family.supports_reasoning_summaries
     {

@@ -52,13 +52,16 @@ function makeToolsList() {
           inputSchema: {
             type: 'object',
             properties: {
-              q: { type: 'string', description: 'Query string' },
-              num: { type: 'number', description: 'Max results (default 5)' },
+              q: { type: 'string', description: 'Query string (alias: query)' },
+              query: { type: 'string', description: 'Query string (alias of q)' },
+              num: { type: 'number', description: 'Max results (default 5, Google allows 1-10)' },
+              max_results: { type: 'number', description: 'Alias of `num` (1-10 for Google)' },
               site: { type: 'string', description: 'Optional site: filter (e.g., ai.google)' },
               engine: { type: 'string', description: 'serpapi|google_cse|google' },
               dateRestrict: { type: 'string', description: 'Google dateRestrict (e.g., d7, m1, y1)' }
             },
-            required: ['q'],
+            // Accept either q or query; validate at runtime
+            required: [],
             additionalProperties: false
           }
         }
@@ -87,8 +90,15 @@ rl.on('line', line => {
   }
   if (method === 'tools/call' && params && params.name === 'search.query') {
     (async () => {
-      const { q, num, site, engine, dateRestrict } = (params.arguments) || {};
-      const n = (num && Number(num)) || 5;
+      const { q, query: queryArg, num, max_results, site, engine, dateRestrict } = (params.arguments) || {};
+      const qText = (q ?? queryArg ?? '').toString();
+      if (!qText.trim()) {
+        write({ jsonrpc: JSONRPC, id, result: { content: [{ type: 'text', text: 'Search error: missing query (provide `q` or `query`)' }], isError: true } });
+        return;
+      }
+      // Google CSE only allows 1..10 for `num`.
+      const nRaw = Number(num ?? max_results);
+      const n = Number.isFinite(nRaw) ? Math.min(10, Math.max(1, nRaw)) : 5;
       const hasSerp = !!process.env.SERPAPI_KEY;
       const hasGoogle = !!process.env.GOOGLE_API_KEY && !!process.env.GOOGLE_CSE_ID;
       let eng = (engine || '').toLowerCase();
@@ -102,8 +112,8 @@ rl.on('line', line => {
       try {
         const doSerpapi = async () => {
           const base = 'https://serpapi.com/search.json';
-          const params = new URLSearchParams({ engine: 'google', q: q || '', api_key: process.env.SERPAPI_KEY, num: String(n) });
-          if (site) params.set('q', `${q} site:${site}`);
+          const params = new URLSearchParams({ engine: 'google', q: qText || '', api_key: process.env.SERPAPI_KEY, num: String(n) });
+          if (site) params.set('q', `${qText} site:${site}`);
           const url = `${base}?${params}`;
           const res = await fetch(url);
           let json; try { json = await res.json(); } catch { json = null; }
@@ -117,15 +127,17 @@ rl.on('line', line => {
 
         const doGoogle = async () => {
           const base = 'https://www.googleapis.com/customsearch/v1';
-          const params = new URLSearchParams({ key: process.env.GOOGLE_API_KEY, cx: process.env.GOOGLE_CSE_ID, q: q || '', num: String(n) });
-          if (site) params.set('q', `${q} site:${site}`);
+          const params = new URLSearchParams({ key: process.env.GOOGLE_API_KEY, cx: process.env.GOOGLE_CSE_ID, q: qText || '', num: String(n) });
+          if (site) params.set('q', `${qText} site:${site}`);
           if (dateRestrict) params.set('dateRestrict', dateRestrict);
           const url = `${base}?${params}`;
           const res = await fetch(url);
           let json; try { json = await res.json(); } catch { json = null; }
           if (!res.ok) {
             const errText = (json && json.error && json.error.message) || res.statusText || String(res.status);
-            throw new Error(`Google CSE HTTP ${res.status}: ${errText}`);
+            const reasons = (json && json.error && Array.isArray(json.error.errors)) ? json.error.errors.map(e => e.reason).filter(Boolean).join(', ') : '';
+            const extra = reasons ? ` (reason: ${reasons})` : '';
+            throw new Error(`Google CSE HTTP ${res.status}: ${errText}${extra}`);
           }
           if (json && json.error) throw new Error(`Google CSE error: ${(json.error && json.error.message) || 'unknown'}`);
           return (json && json.items || []).map(r => ({ title: r.title, link: r.link, snippet: (r.snippet || '') }));

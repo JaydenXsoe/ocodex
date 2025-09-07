@@ -5,6 +5,7 @@
 // the TUI or the tracing stack).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
+mod anthropic;
 mod apply_patch;
 mod bash;
 mod chat_completions;
@@ -12,6 +13,7 @@ mod client;
 mod client_common;
 pub mod codex;
 mod codex_conversation;
+mod gemini;
 pub use codex_conversation::CodexConversation;
 pub mod config;
 pub mod config_profile;
@@ -29,7 +31,7 @@ pub mod landlock;
 mod mcp_connection_manager;
 mod mcp_tool_call;
 mod message_history;
-mod model_provider_info;
+pub mod model_provider_info;
 pub mod parse_command;
 pub use model_provider_info::BUILT_IN_OSS_MODEL_PROVIDER_ID;
 pub use model_provider_info::ModelProviderInfo;

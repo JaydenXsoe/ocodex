@@ -111,7 +111,7 @@ pub async fn run_main(
     let model_provider_override = if cli.oss {
         Some(BUILT_IN_OSS_MODEL_PROVIDER_ID.to_owned())
     } else {
-        None
+        cli.backend.clone()
     };
 
     // canonicalize the cwd
@@ -164,23 +164,21 @@ pub async fn run_main(
 
     // Default to enabling network when using workspace-write unless the user
     // explicitly provided a network override.
-    if !has_net_override {
-        if let codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+    if !has_net_override
+        && let codex_core::protocol::SandboxPolicy::WorkspaceWrite {
             writable_roots,
             network_access,
             exclude_tmpdir_env_var,
             exclude_slash_tmp,
         } = &config.sandbox_policy
-        {
-            if !network_access {
-                config.sandbox_policy = codex_core::protocol::SandboxPolicy::WorkspaceWrite {
-                    writable_roots: writable_roots.clone(),
-                    network_access: true,
-                    exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
-                    exclude_slash_tmp: *exclude_slash_tmp,
-                };
-            }
-        }
+        && !network_access
+    {
+        config.sandbox_policy = codex_core::protocol::SandboxPolicy::WorkspaceWrite {
+            writable_roots: writable_roots.clone(),
+            network_access: true,
+            exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
+            exclude_slash_tmp: *exclude_slash_tmp,
+        };
     }
 
     // Disallow OpenAI providers unless explicitly enabled via the CLI flag.

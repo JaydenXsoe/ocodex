@@ -45,21 +45,27 @@ where
     }
 
     // If invoked as `ocodex` (or a platform-specific variant containing
-    // "ocodex"), prefer a repo-local CODEX_HOME baked in at build time so the
-    // binary can be moved and still find `ocodex/.codex`.
+    // "ocodex"), set a sensible default for CODEX_HOME when unset.
     if exe_name.contains("ocodex") && std::env::var("CODEX_HOME").unwrap_or_default().is_empty() {
-        // Prefer a repo-local CODEX_HOME baked at build time
-        if let Some(repo_root) = option_env!("OCODEX_DEFAULT_REPO_ROOT") {
-            let candidate = Path::new(repo_root).join(".codex");
-            if candidate.is_dir() {
-                unsafe { std::env::set_var("CODEX_HOME", &candidate) };
-            }
-        }
-        // If still unset, prefer the global toolpack location inside containers
-        if std::env::var("CODEX_HOME").unwrap_or_default().is_empty() {
+        // In containers, always prefer the global-share toolpack path so the
+        // binary does not require extra flags.
+        if is_container_env() {
             let global = Path::new("/usr/local/share/ocodex/.codex");
-            if global.is_dir() {
-                unsafe { std::env::set_var("CODEX_HOME", &global) };
+            unsafe { std::env::set_var("CODEX_HOME", global) };
+        } else {
+            // Outside containers, prefer a repo-local CODEX_HOME baked at build time
+            if let Some(repo_root) = option_env!("OCODEX_DEFAULT_REPO_ROOT") {
+                let candidate = Path::new(repo_root).join(".codex");
+                if candidate.is_dir() {
+                    unsafe { std::env::set_var("CODEX_HOME", &candidate) };
+                }
+            }
+            // If still unset, and a global toolpack exists, use it
+            if std::env::var("CODEX_HOME").unwrap_or_default().is_empty() {
+                let global = Path::new("/usr/local/share/ocodex/.codex");
+                if global.is_dir() {
+                    unsafe { std::env::set_var("CODEX_HOME", global) };
+                }
             }
         }
     }
@@ -132,4 +138,26 @@ where
             unsafe { std::env::set_var(&key, &value) };
         }
     }
+}
+
+fn is_container_env() -> bool {
+    if std::path::Path::new("/.dockerenv").exists()
+        || std::path::Path::new("/.containerenv").exists()
+    {
+        return true;
+    }
+    if std::env::var("container").is_ok() {
+        return true;
+    }
+    if let Ok(contents) = std::fs::read_to_string("/proc/1/cgroup") {
+        let lower = contents.to_ascii_lowercase();
+        if lower.contains("docker")
+            || lower.contains("containerd")
+            || lower.contains("kubepods")
+            || lower.contains("podman")
+        {
+            return true;
+        }
+    }
+    false
 }

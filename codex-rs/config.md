@@ -8,7 +8,12 @@ Codex supports several mechanisms for setting config values:
   - Values can contain objects, such as `--config shell_environment_policy.include_only=["PATH", "HOME", "USER"]`.
   - For consistency with `config.toml`, values are in TOML format rather than JSON format, so use `{a = 1, b = 2}` rather than `{"a": 1, "b": 2}`.
   - If `value` cannot be parsed as a valid TOML value, it is treated as a string value. This means that both `-c model="o3"` and `-c model=o3` are equivalent.
-- The `$CODEX_HOME/config.toml` configuration file where the `CODEX_HOME` environment value defaults to `~/.codex`. (Note `CODEX_HOME` will also be where logs and other Codex-related information are stored.)
+- The `$CODEX_HOME/config.toml` configuration file. If `CODEX_HOME` is not set, Codex resolves it in this order:
+  1) If running inside a container (Docker/OCI): `/usr/local/share/ocodex/.codex`
+  2) A repo-local path if the current directory is within an `ocodex` repo: `REPO_ROOT/ocodex/.codex`
+  3) If a global toolpack exists: `/usr/local/share/ocodex/.codex`
+  4) Fallback: `~/.codex`
+  (Note `CODEX_HOME` will also be where logs and other Codex-related information are stored.)
 
 Both the `--config` flag and the `config.toml` file support the following options:
 
@@ -118,6 +123,17 @@ stream_idle_timeout_ms = 300000    # 5m idle timeout
 #### request_max_retries
 
 How many times Codex will retry a failed HTTP request to the model provider. Defaults to `4`.
+
+### Built-in providers and API keys
+
+Codex includes a few built-in providers out of the box:
+
+- `openai` (Responses API). Uses `CHATGPT` or `OPENAI` auth via the normal login flow, or `OPENAI_API_KEY` when targeting Chat Completions.
+- `oss` (local/Ollama-like, Chat Completions). No API key required.
+- `xai` (xAI, Chat Completions). Requires `XAI_API_KEY`.
+- `openrouter` (OpenRouter, Chat Completions). Requires `OPENROUTER_API_KEY`.
+
+If a provider declares an environment variable (e.g., `XAI_API_KEY`, `OPENROUTER_API_KEY`) and it is missing or empty, Codex returns an error when attempting to send a request. You can set keys in your shell environment or in `~/.codex/.env`.
 
 #### stream_max_retries
 
@@ -366,6 +382,15 @@ command = "npx"
 args = ["-y", "mcp-server"]
 env = { "API_KEY" = "value" }
 ```
+
+For the bundled simple websearch MCP server (`codex-rs/scripts/mcp_websearch.js`), the exposed tool `search.query` accepts the following arguments:
+- `q` or `query`: the search query string (aliases; either works)
+- `num`: maximum results (Google CSE allows 1–10; values are clamped)
+- `site`: optional site filter (e.g., `ai.google`)
+- `engine`: `google_cse`, `serpapi`, or `google` (alias of `google_cse`)
+- `dateRestrict`: Google `dateRestrict` (e.g., `d7`, `m1`, `y1`)
+
+If neither `GOOGLE_API_KEY`/`GOOGLE_CSE_ID` nor `SERPAPI_KEY` is provided via the MCP server environment, the server will still respond (with `No results.`) and list the tool schema, allowing basic validation of request wiring without making network calls.
 
 ## disable_response_storage
 

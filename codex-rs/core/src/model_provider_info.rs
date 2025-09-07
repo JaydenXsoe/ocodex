@@ -33,6 +33,12 @@ pub enum WireApi {
     /// Regular Chat Completions compatible with `/v1/chat/completions`.
     #[default]
     Chat,
+
+    /// Anthropic Messages API.
+    Anthropic,
+
+    /// Google Generative Language (Gemini) API.
+    Gemini,
 }
 
 /// Serializable representation of a provider definition.
@@ -152,6 +158,10 @@ impl ModelProviderInfo {
         match self.wire_api {
             WireApi::Responses => format!("{base_url}/responses{query_string}"),
             WireApi::Chat => format!("{base_url}/chat/completions{query_string}"),
+            WireApi::Anthropic => format!("{base_url}/v1/messages{query_string}"),
+            // Gemini URLs include the model name; callers should construct the
+            // final URL directly. Provide a sensible base for convenience.
+            WireApi::Gemini => format!("{base_url}/v1beta{query_string}"),
         }
     }
 
@@ -227,6 +237,24 @@ const DEFAULT_OLLAMA_PORT: u32 = 11434;
 
 pub const BUILT_IN_OSS_MODEL_PROVIDER_ID: &str = "oss";
 
+/// Return the default provider id for a given model slug, if one is implied.
+/// This helps frontends pick a sensible provider when a user chooses a model
+/// family without explicitly selecting a backend.
+pub fn default_provider_for_model_slug(slug: &str) -> Option<&'static str> {
+    let s = slug.to_ascii_lowercase();
+    if s.starts_with("grok-") {
+        Some("xai")
+    } else if s.starts_with("claude-") {
+        Some("anthropic")
+    } else if s.starts_with("gemini-") {
+        Some("google")
+    } else if s.starts_with("gpt-oss") {
+        Some(BUILT_IN_OSS_MODEL_PROVIDER_ID)
+    } else {
+        None
+    }
+}
+
 /// Built-in default provider list.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     use ModelProviderInfo as P;
@@ -235,7 +263,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
     // providers are bundled with Codex CLI, so we only include the OpenAI and
     // open source ("oss") providers by default. Users are encouraged to add to
     // `model_providers` in config.toml to add their own providers.
-    [
+    let mut map: HashMap<String, ModelProviderInfo> = [
         (
             "openai",
             P {
@@ -275,11 +303,103 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 requires_openai_auth: true,
             },
         ),
+        (
+            "anthropic",
+            P {
+                name: "Anthropic".into(),
+                base_url: Some("https://api.anthropic.com".into()),
+                env_key: Some("ANTHROPIC_API_KEY".into()),
+                env_key_instructions: Some(
+                    "Set ANTHROPIC_API_KEY in your environment or ~/.codex/.env".into(),
+                ),
+                wire_api: WireApi::Anthropic,
+                query_params: None,
+                http_headers: None,
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
+            },
+        ),
+        (
+            "google",
+            P {
+                name: "Google".into(),
+                base_url: Some("https://generativelanguage.googleapis.com".into()),
+                env_key: Some("GOOGLE_API_KEY".into()),
+                env_key_instructions: Some(
+                    "Set GOOGLE_API_KEY in your environment or ~/.codex/.env".into(),
+                ),
+                wire_api: WireApi::Gemini,
+                query_params: None,
+                http_headers: None,
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
+            },
+        ),
+        (
+            "xai",
+            P {
+                name: "xAI".into(),
+                base_url: Some("https://api.x.ai/v1".into()),
+                env_key: Some("XAI_API_KEY".into()),
+                env_key_instructions: Some(
+                    "Set XAI_API_KEY in your environment or ~/.codex/.env".into(),
+                ),
+                wire_api: WireApi::Chat,
+                query_params: None,
+                http_headers: None,
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
+            },
+        ),
+        (
+            "openrouter",
+            P {
+                name: "OpenRouter".into(),
+                base_url: Some("https://openrouter.ai/api/v1".into()),
+                env_key: Some("OPENROUTER_API_KEY".into()),
+                env_key_instructions: Some(
+                    "Set OPENROUTER_API_KEY in your environment or ~/.codex/.env".into(),
+                ),
+                wire_api: WireApi::Chat,
+                query_params: None,
+                http_headers: None,
+                env_http_headers: None,
+                request_max_retries: None,
+                stream_max_retries: None,
+                stream_idle_timeout_ms: None,
+                requires_openai_auth: false,
+            },
+        ),
         (BUILT_IN_OSS_MODEL_PROVIDER_ID, create_oss_provider()),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
-    .collect()
+    .collect();
+
+    // Convenience aliases: allow `--backend claude|gemini|oai|grok`.
+    if let Some(p) = map.get("anthropic").cloned() {
+        map.entry("claude".into()).or_insert(p);
+    }
+    if let Some(p) = map.get("google").cloned() {
+        map.entry("gemini".into()).or_insert(p);
+    }
+    if let Some(p) = map.get("openai").cloned() {
+        map.entry("oai".into()).or_insert(p);
+    }
+    if let Some(p) = map.get("xai").cloned() {
+        map.entry("grok".into()).or_insert(p);
+    }
+
+    map
 }
 
 pub fn create_oss_provider() -> ModelProviderInfo {

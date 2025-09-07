@@ -166,6 +166,12 @@ API_KEY = "..."
 
 Codex will advertise MCP tools to the model at startup. This yields structured tool calls (e.g., `search.query`) instead of raw shell.
 
+Default CODEX_HOME resolution (when `CODEX_HOME` is unset):
+- In containers (Docker/OCI): `/usr/local/share/ocodex/.codex`
+- In a checkout of this repo: `REPO_ROOT/ocodex/.codex`
+- Otherwise, if present: `/usr/local/share/ocodex/.codex`
+- Else: `~/.codex`
+
 Note on network: `ocodex` defaults to `workspace-write` and enables outbound network by default unless you explicitly disable it via config. If your environment still blocks network, check your sandbox settings or CI runner.
 
 #### Example: Built-in simple MCP search server
@@ -174,6 +180,13 @@ This repo includes a minimal MCP server script exposing a `search.query` tool:
 
 - Script: `codex-rs/scripts/mcp_websearch.js`
 - Implements: `initialize`, `tools/list` (tool call not required for detection)
+
+Arguments accepted by `search.query`:
+- `q` or `query`: query string (aliases; either works)
+- `num`: max results (Google allows 1–10; values are clamped)
+- `site`: optional site filter (e.g., `ai.google`)
+- `engine`: `google_cse`, `serpapi`, or `google` (alias of `google_cse`)
+- `dateRestrict`: Google `dateRestrict` param (e.g., `d7`, `m1`, `y1`)
 
 To configure ocodex to run it, add to `ocodex/.codex/config.toml`:
 
@@ -197,6 +210,20 @@ cargo run -p codex-mcp-client -- node scripts/mcp_websearch.js
 ```
 
 This should print a tools/list response containing `search.query`.
+
+Quick local dry-run without network (verifies argument parsing):
+
+```
+cd codex-rs
+(
+  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+  echo '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+  # Use engine="none" to avoid network; send only `query` to validate alias acceptance
+  echo '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search.query","arguments":{"engine":"none","num":11,"query":"alias acceptance test","site":"example.com","dateRestrict":"d7"}}}'
+) | node scripts/mcp_websearch.js
+```
+
+You should see a tools/list with both `q` and `query` in the schema and a `No results.` response for the tools/call (since no engine is selected). The `num` argument will be clamped to `10` internally for Google.
 
 ### Models and Ollama deployment
 

@@ -2,7 +2,7 @@
 # Synchronize MCP server configuration from a project .env into Codex config.toml.
 #
 # Usage:
-#   scripts/setup_mcp_from_env.sh [--local|--global] \
+#   scripts/setup_mcp_from_env.sh [--local|--global|--global-share] \
 #       --server <name> \
 #       --command <program> \
 #       --arg <arg> [--arg <arg> ...] \
@@ -29,6 +29,7 @@
 # - --local writes to "$PROJECT_ROOT/ocodex/.codex/config.toml" and exports
 #   CODEX_HOME you can use when launching ocodex: `CODEX_HOME=ocodex/.codex ocodex`.
 # - --global writes to "$HOME/.codex/config.toml".
+# - --global-share writes to "/usr/local/share/ocodex/.codex/config.toml".
 # - The script updates (replaces) only the [mcp_servers.<name>] block.
 # - Values are read from the project .env ("$PROJECT_ROOT/.env").
 
@@ -47,6 +48,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --local) scope="local"; shift ;;
     --global) scope="global"; shift ;;
+    --global-share) scope="global-share"; shift ;;
     --server) server="${2:-}"; shift 2 ;;
     --command) command_prog="${2:-}"; shift 2 ;;
     --arg) args+=("${2:-}"); shift 2 ;;
@@ -68,11 +70,16 @@ if [[ ! -f "$DOT_ENV" ]]; then
 fi
 
 # Resolve CODEX_HOME and CONFIG path per scope
-if [[ "$scope" == "local" ]]; then
-  CODEX_HOME_DIR="$PROJECT_ROOT/ocodex/.codex"
-else
-  CODEX_HOME_DIR="$HOME/.codex"
-fi
+case "$scope" in
+  local)
+    CODEX_HOME_DIR="$PROJECT_ROOT/ocodex/.codex" ;;
+  global)
+    CODEX_HOME_DIR="$HOME/.codex" ;;
+  global-share)
+    CODEX_HOME_DIR="/usr/local/share/ocodex/.codex" ;;
+  *)
+    echo "Unknown scope: $scope" >&2; exit 2 ;;
+esac
 CONFIG_PATH="$CODEX_HOME_DIR/config.toml"
 mkdir -p "$CODEX_HOME_DIR"
 
@@ -148,4 +155,3 @@ echo "Updated: $CONFIG_PATH"
 if [[ "$scope" == "local" ]]; then
   echo "Launch ocodex with: CODEX_HOME=\"$CODEX_HOME_DIR\" ocodex"
 fi
-

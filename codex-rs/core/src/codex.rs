@@ -1066,12 +1066,21 @@ async fn submission_loop(
             } => {
                 // Recalculate the persistent turn context with provided overrides.
                 let prev = Arc::clone(&turn_context);
-                let provider = prev.client.get_provider();
+                let mut provider = prev.client.get_provider();
 
                 // Effective model + family
                 let (effective_model, effective_family) = if let Some(m) = model {
                     let fam =
                         find_family_for_model(&m).unwrap_or_else(|| config.model_family.clone());
+
+                    // If the new model implies a provider change, switch to it when available.
+                    if let Some(pid) =
+                        crate::model_provider_info::default_provider_for_model_slug(&m)
+                        && let Some(p) = config.model_providers.get(pid)
+                    {
+                        provider = p.clone();
+                    }
+
                     (m, fam)
                 } else {
                     (prev.client.get_model(), prev.client.get_model_family())
@@ -1087,6 +1096,16 @@ async fn submission_loop(
                 let mut updated_config = (*config).clone();
                 updated_config.model = effective_model.clone();
                 updated_config.model_family = effective_family.clone();
+                // Persist the provider id when it changes due to model selection.
+                if let Some(pid) = crate::model_provider_info::default_provider_for_model_slug(
+                    &updated_config.model,
+                ) && updated_config.model_providers.contains_key(pid)
+                {
+                    updated_config.model_provider_id = pid.to_string();
+                    if let Some(p) = updated_config.model_providers.get(pid) {
+                        updated_config.model_provider = p.clone();
+                    }
+                }
 
                 let client = ModelClient::new(
                     Arc::new(updated_config),
@@ -1173,11 +1192,19 @@ async fn submission_loop(
                 // attempt to inject input into current task
                 if let Err(items) = sess.inject_input(items) {
                     // Derive a fresh TurnContext for this turn using the provided overrides.
-                    let provider = turn_context.client.get_provider();
+                    let mut provider = turn_context.client.get_provider();
 
                     // Derive a model family for the requested model; fall back to the session's.
                     let model_family = find_family_for_model(&model)
                         .unwrap_or_else(|| config.model_family.clone());
+
+                    // If this model implies a different provider, switch for this turn.
+                    if let Some(pid) =
+                        crate::model_provider_info::default_provider_for_model_slug(&model)
+                        && let Some(p) = config.model_providers.get(pid)
+                    {
+                        provider = p.clone();
+                    }
 
                     // Create a per‑turn Config clone with the requested model/family.
                     let mut per_turn_config = (*config).clone();
