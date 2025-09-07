@@ -31,7 +31,7 @@ fn orchestrates_single_task() {
 fn event_bus_publish_subscribe() {
     let bus = std::sync::Arc::new(orch::InProcEventBus::default());
     let rx = bus.subscribe();
-    bus.publish(orch::Event { kind: orch::EventKind::Info, message: "hello".into() });
+    bus.publish(orch::Event { kind: orch::EventKind::Info, message: "hello".into(), ..Default::default() });
     let got = rx.recv().expect("recv");
     assert!(matches!(got.kind, orch::EventKind::Info));
     assert_eq!(got.message, "hello");
@@ -85,4 +85,19 @@ fn classical_optimizer_respects_priority_and_deps() {
     let pos = |id: &str| delta.order.iter().position(|x| x == id).unwrap();
     assert!(pos("C") < pos("A"));
     assert!(pos("A") < pos("B"));
+}
+
+#[test]
+fn write_lock_pop_eligible_behaves() {
+    let q = orch::InMemoryTaskQueue::default();
+    q.push_all(vec![
+        orch::Task { id: "W".into(), description: "write".into(), payload: json!({"needs_write_lock": true}) },
+        orch::Task { id: "R".into(), description: "read".into(), payload: json!({}) },
+    ]);
+    // With a write in flight, we should skip the first (write) and pick the read
+    let pick = q.pop_eligible(1);
+    assert!(pick.is_some());
+    let (t, needs) = pick.unwrap();
+    assert_eq!(t.id, "R");
+    assert!(!needs);
 }

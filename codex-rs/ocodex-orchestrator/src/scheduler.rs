@@ -19,3 +19,20 @@ impl Scheduler for InProcessScheduler {
         Ok(())
     }
 }
+
+pub struct EnvProbe;
+
+impl EnvProbe {
+    pub fn cpus() -> usize {
+        std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+    }
+}
+
+/// Compute a safe concurrency based on caps, CPU availability, and workload size.
+pub fn compute_concurrency(cap: usize, total_tasks: usize) -> usize {
+    let env_cap = std::env::var("ORCH_MAX_CONCURRENCY").ok().and_then(|s| s.parse::<usize>().ok());
+    let cpus = EnvProbe::cpus();
+    let cpu_limit = cpus.saturating_sub(1).max(1); // leave one core for OS
+    let hard_cap = env_cap.unwrap_or(cap.max(1));
+    hard_cap.min(cpu_limit).min(total_tasks.max(1))
+}

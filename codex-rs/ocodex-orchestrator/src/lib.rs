@@ -143,7 +143,7 @@ impl<W: TaskWorker, P: Planner> MultiAgentOrchestrator<W, P> {
     }
 
     pub fn execute_with_delegation(&mut self, playbook: Playbook) -> Result<(), OrchestrationError> {
-        self.events.publish(Event { kind: EventKind::Info, message: format!("starting playbook: {}", playbook.name) });
+        self.events.publish(Event { kind: EventKind::Info, message: format!("starting playbook: {}", playbook.name), ..Default::default() });
 
         // Build a reduced instance for the optimizer
         let tasks = playbook.tasks.clone();
@@ -171,7 +171,7 @@ impl<W: TaskWorker, P: Planner> MultiAgentOrchestrator<W, P> {
         // A/B compare against classical baseline and publish a summary event
         let classical = crate::qc::ClassicalOptimizer;
         let ab = crate::ab::compare(&classical, self.optimizer.as_ref(), &inst);
-        self.events.publish(Event { kind: EventKind::Info, message: format!("qc_ab:winner={} classical_cost={} qc_cost={} confidence={}", ab.winner, ab.classical_cost, ab.qc_cost, delta.confidence) });
+        self.events.publish(Event { kind: EventKind::Info, message: format!("qc_ab:winner={} classical_cost={} qc_cost={} confidence={}", ab.winner, ab.classical_cost, ab.qc_cost, delta.confidence), ..Default::default() });
         // Reorder tasks per delta.order while keeping any extras
         let mut by_id: std::collections::HashMap<String, Task> = tasks.into_iter().map(|t| (t.id.clone(), t)).collect();
         let mut ordered: Vec<Task> = Vec::new();
@@ -188,10 +188,10 @@ impl<W: TaskWorker, P: Planner> MultiAgentOrchestrator<W, P> {
         impl TaskRunner for LocalRunner {
             fn run_one(&self, task: Task) -> Result<(), OrchestrationError> {
                 if self.cancel.is_canceled() {
-                    self.events.publish(Event { kind: EventKind::Warn, message: "canceled".into() });
+                    self.events.publish(Event { kind: EventKind::Warn, message: "canceled".into(), ..Default::default() });
                     return Ok(());
                 }
-                self.events.publish(Event { kind: EventKind::Progress, message: format!("task:start:{}", task.id) });
+                self.events.publish(Event { kind: EventKind::Progress, message: format!("task:start:{}", task.id), task_id: Some(task.id.clone()), ..Default::default() });
                 self.policy.before_task(&task, &self.events).map_err(OrchestrationError::Internal)?;
                 let result = serde_json::json!({"ok": true, "task": task.id});
                 let delta = MemoryDelta {
@@ -201,7 +201,7 @@ impl<W: TaskWorker, P: Planner> MultiAgentOrchestrator<W, P> {
                 };
                 let _ = self.mem.merge(&delta);
                 self.policy.after_task(&task, &self.events).map_err(OrchestrationError::Internal)?;
-                self.events.publish(Event { kind: EventKind::Progress, message: "task:done".into() });
+                self.events.publish(Event { kind: EventKind::Progress, message: "task:done".into(), task_id: Some(task.id.clone()), ..Default::default() });
                 self.metrics.inc("tasks_completed");
                 Ok(())
             }
@@ -216,8 +216,10 @@ impl<W: TaskWorker, P: Planner> MultiAgentOrchestrator<W, P> {
         };
 
         self.metrics.inc("playbook_started");
-        self.scheduler.run(ordered, self.max_concurrency, &runner)?;
-        self.events.publish(Event { kind: EventKind::Info, message: "playbook:done".into() });
+        let target = crate::scheduler::compute_concurrency(self.max_concurrency, ordered.len());
+        self.events.publish(Event { kind: EventKind::Info, message: format!("scheduler_target_concurrency={}", target), ..Default::default() });
+        self.scheduler.run(ordered, target, &runner)?;
+        self.events.publish(Event { kind: EventKind::Info, message: "playbook:done".into(), ..Default::default() });
         Ok(())
     }
 }
